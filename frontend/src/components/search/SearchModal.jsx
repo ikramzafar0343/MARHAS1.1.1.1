@@ -139,16 +139,17 @@ const SearchModal = ({ open, onClose }) => {
             onClick={handleClose}
           />
 
-          <motion.div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby={titleId}
-            className="search-modal-panel"
-            initial={{ opacity: 0, y: -16 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -12 }}
-            transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
-          >
+          <div className="search-modal-shell">
+            <motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby={titleId}
+              className="search-modal-panel"
+              initial={{ opacity: 0, y: -16 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -12 }}
+              transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+            >
             <h2 id={titleId} className="sr-only">
               Search products
             </h2>
@@ -218,7 +219,8 @@ const SearchModal = ({ open, onClose }) => {
                 </ul>
               )}
             </div>
-          </motion.div>
+            </motion.div>
+          </div>
         </motion.div>
       )}
     </AnimatePresence>,

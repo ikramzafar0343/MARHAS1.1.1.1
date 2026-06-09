@@ -35,7 +35,6 @@ export const applySecurityMiddleware = (app) => {
 
   // CORS applies to API calls only — not same-origin static assets (JS/CSS/images)
   app.use(env.API_PREFIX, apiCors);
-  app.options(`${env.API_PREFIX}/*`, apiCors);
 
   app.use(compression());
   app.use(express.json({ limit: '10mb' }));

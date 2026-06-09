@@ -16,7 +16,12 @@ const CategoryCard = ({ category, index, totalCards }) => {
       style={{ '--category-index': index + 1 }}
       aria-labelledby={titleId}
     >
-      <div className="category-card-sticky">
+      <div
+        className="category-card-sticky"
+        style={{
+          '--category-image-position': category.image?.objectPosition || 'center center'
+        }}
+      >
         <div className="category-card-inner">
           <picture className="category-card-picture">
             {image.webp && (

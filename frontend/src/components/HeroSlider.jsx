@@ -101,6 +101,7 @@ const HeroSlider = () => {
                 src={resolveMediaUrl(slide.image)}
                 alt={slide.alt}
                 className={`lux-hero-slide-image${loadedSlides.has(slide.id) ? ' is-loaded' : ''}`}
+                style={slide.objectPosition ? { objectPosition: slide.objectPosition } : undefined}
                 loading="eager"
                 decoding="async"
                 fetchPriority={index === 0 ? 'high' : 'auto'}

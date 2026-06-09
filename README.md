@@ -238,14 +238,28 @@ npm run seed
 
 Deploy **backend** and **frontend** as **two separate Railway services** from the same GitHub repo.
 
-### Backend service
+### Backend service (choose one option)
+
+**Option A — Root directory `Backend` (recommended, no Docker)**
 
 | Setting | Value |
 |---------|-------|
 | Root Directory | `Backend` |
+| Builder | Nixpacks |
 | Build Command | `npm install` |
 | Start Command | `npm start` |
 | Health Check | `/api/v1/health` |
+
+**Option B — Deploy from repo root (Docker)**
+
+| Setting | Value |
+|---------|-------|
+| Root Directory | `/` (leave empty) |
+| Builder | Dockerfile |
+| Dockerfile Path | `Dockerfile` |
+| Health Check | `/api/v1/health` |
+
+> If you see `open Dockerfile: no such file or directory`, redeploy after pulling the latest `main` — the root `Dockerfile` is included for this setup.
 
 Add the same backend environment variables listed in the Render section. Railway sets `PORT` automatically.
 
@@ -275,6 +289,18 @@ Config file: [`frontend/railway.toml`](./frontend/railway.toml)
 3. Add **Service 1** → set root directory to `Backend` → add env vars → deploy.
 4. Add **Service 2** → set root directory to `frontend` → add `VITE_*` vars pointing to the backend URL → deploy.
 5. Copy each service's public URL and update `CORS_ORIGIN` / `APP_URL` on the backend.
+
+---
+
+## Troubleshooting
+
+| Error | Fix |
+|-------|-----|
+| `open Dockerfile: no such file or directory` | Use **Option B** above (root `Dockerfile`), or set Railway **Root Directory** to `Backend` and builder to **Nixpacks** |
+| API starts but frontend cannot connect | Set `VITE_API_URL` and `VITE_ASSET_URL` to your live backend URL (with `https://`) |
+| CORS errors in browser | Add your exact frontend URL to backend `CORS_ORIGIN` |
+| Uploads disappear after redeploy | Set `STORAGE_PROVIDER=cloudinary` (local disk is ephemeral on cloud hosts) |
+| `MONGODB_URI is required` | Add MongoDB Atlas connection string in service environment variables |
 
 ---
 

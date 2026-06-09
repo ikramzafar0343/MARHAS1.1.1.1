@@ -14,9 +14,22 @@ const normalizeOrigin = (value = '') => value.replace(/\/$/, '');
 export const applySecurityMiddleware = (app) => {
   app.set('trust proxy', 1);
 
+  const cspDirectives = helmet.contentSecurityPolicy.getDefaultDirectives();
+  cspDirectives['img-src'] = ["'self'", 'data:', 'blob:'];
+
+  if (env.STORAGE_PROVIDER === 'cloudinary' && env.CLOUDINARY_CLOUD_NAME) {
+    cspDirectives['img-src'].push('https://res.cloudinary.com');
+  }
+
+  if (env.STORAGE_PROVIDER === 's3' && env.AWS_S3_BUCKET) {
+    const region = env.AWS_REGION || 'us-east-1';
+    cspDirectives['img-src'].push(`https://${env.AWS_S3_BUCKET}.s3.${region}.amazonaws.com`);
+  }
+
   app.use(
     helmet({
-      crossOriginResourcePolicy: { policy: 'cross-origin' }
+      crossOriginResourcePolicy: { policy: 'cross-origin' },
+      contentSecurityPolicy: { directives: cspDirectives }
     })
   );
 

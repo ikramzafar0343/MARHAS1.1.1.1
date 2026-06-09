@@ -1,7 +1,58 @@
-const backendBase = () =>
-  import.meta.env.VITE_ASSET_URL ||
-  import.meta.env.VITE_API_URL?.replace(/\/api\/v\d+\/?$/, '') ||
-  'http://localhost:5000';
+const backendBase = () => {
+  const assetUrl = import.meta.env.VITE_ASSET_URL?.trim();
+  if (assetUrl) {
+    return assetUrl.replace(/\/$/, '');
+  }
+
+  const apiUrl = (import.meta.env.VITE_API_URL || '').trim();
+
+  // Same-origin deploy (e.g. Render Docker): API is relative like /api/v1
+  if (apiUrl.startsWith('/')) {
+    if (typeof window !== 'undefined' && window.location?.origin) {
+      return window.location.origin;
+    }
+    return '';
+  }
+
+  const hostFromApi = apiUrl.replace(/\/api\/v\d+\/?$/, '').trim();
+  if (hostFromApi) {
+    return hostFromApi.replace(/\/$/, '');
+  }
+
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    return window.location.origin;
+  }
+
+  return 'http://localhost:5000';
+};
+
+const toUploadPath = (value) => {
+  if (!value || typeof value !== 'string') {
+    return '';
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return '';
+  }
+
+  if (trimmed.startsWith('http')) {
+    try {
+      const { pathname } = new URL(trimmed);
+      return pathname.startsWith('/uploads/') ? pathname : '';
+    } catch {
+      return '';
+    }
+  }
+
+  const path = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+  return path.startsWith('/uploads/') ? path : '';
+};
+
+const buildUploadUrl = (uploadPath) => {
+  const base = backendBase();
+  return base ? `${base}${uploadPath}` : uploadPath;
+};
 
 const decodeHtmlEntities = (value) => {
   if (typeof value !== 'string' || !value.includes('&')) {
@@ -63,12 +114,14 @@ export const normalizeStorefrontAssetPath = (url) => {
     return trimmed;
   }
 
+  const uploadPath = toUploadPath(trimmed);
+  if (uploadPath) {
+    return uploadPath;
+  }
+
   if (trimmed.startsWith('http')) {
     try {
       const parsed = new URL(trimmed);
-      if (parsed.pathname.startsWith('/uploads/')) {
-        return trimmed;
-      }
       if (isFrontendStaticAsset(parsed.pathname)) {
         return parsed.pathname;
       }
@@ -99,7 +152,16 @@ export const resolveAssetUrl = (url) => {
     return '';
   }
 
-  if (normalized.startsWith('http') || normalized.startsWith('data:') || normalized.startsWith('blob:')) {
+  if (normalized.startsWith('data:') || normalized.startsWith('blob:')) {
+    return normalized;
+  }
+
+  const uploadPath = toUploadPath(normalized);
+  if (uploadPath) {
+    return buildUploadUrl(uploadPath);
+  }
+
+  if (normalized.startsWith('http')) {
     return normalized;
   }
 
@@ -110,5 +172,5 @@ export const resolveAssetUrl = (url) => {
 
   const path = extractPath(normalized);
   const base = backendBase().replace(/\/$/, '');
-  return `${base}${path}`;
+  return base ? `${base}${path}` : path;
 };

@@ -601,6 +601,121 @@
     backdrop-filter: blur(16px);
   }
 
+  .search-modal {
+    @apply fixed inset-0 z-[120] flex items-start justify-center px-4 pt-[calc(env(safe-area-inset-top,0px)+5.5rem)] md:pt-28;
+  }
+
+  .search-modal-backdrop {
+    @apply absolute inset-0 border-0 bg-[rgba(31,31,31,0.42)] backdrop-blur-[2px];
+  }
+
+  .search-modal-panel {
+    @apply relative z-10 w-full max-w-2xl overflow-hidden rounded-none border bg-brand-white;
+    border-color: rgba(31, 31, 31, 0.1);
+    box-shadow: 0 24px 60px rgba(31, 31, 31, 0.14);
+  }
+
+  .search-modal-form {
+    @apply flex items-center gap-3 border-b px-4 py-3 md:px-5 md:py-4;
+    border-color: rgba(31, 31, 31, 0.08);
+    color: var(--color-brand-primary);
+  }
+
+  .search-modal-input {
+    @apply min-w-0 flex-1 border-0 bg-transparent outline-none;
+    font-family: var(--font-brand);
+    font-size: 0.95rem;
+    font-weight: 400;
+    letter-spacing: 0.02em;
+    color: var(--color-brand-primary);
+  }
+
+  .search-modal-input::placeholder {
+    color: rgba(31, 31, 31, 0.42);
+  }
+
+  .search-modal-close {
+    @apply inline-flex h-9 w-9 items-center justify-center rounded-full border-0 bg-transparent transition-colors duration-200;
+    color: var(--color-brand-primary);
+  }
+
+  .search-modal-close:hover {
+    color: color-mix(in srgb, var(--color-brand-accent) 78%, var(--color-brand-primary));
+  }
+
+  .search-modal-body {
+    @apply max-h-[min(24rem,58vh)] overflow-y-auto px-4 py-3 md:px-5 md:py-4;
+  }
+
+  .search-modal-hint,
+  .search-modal-status {
+    @apply py-6 text-center;
+    font-family: var(--font-brand);
+    font-size: 0.82rem;
+    letter-spacing: 0.04em;
+    color: rgba(31, 31, 31, 0.55);
+  }
+
+  .search-modal-results {
+    @apply m-0 list-none p-0;
+  }
+
+  .search-modal-result {
+    @apply flex items-center gap-3 border-b py-3 transition-colors duration-200;
+    border-color: rgba(31, 31, 31, 0.06);
+    color: var(--color-brand-primary);
+    text-decoration: none;
+  }
+
+  .search-modal-result:last-child {
+    @apply border-b-0;
+  }
+
+  .search-modal-result:hover {
+    color: color-mix(in srgb, var(--color-brand-accent) 78%, var(--color-brand-primary));
+  }
+
+  .search-modal-result-media {
+    @apply h-14 w-11 shrink-0 overflow-hidden bg-brand-bg;
+  }
+
+  .search-modal-result-media img,
+  .search-modal-result-fallback {
+    @apply h-full w-full object-cover;
+  }
+
+  .search-modal-result-fallback {
+    background: linear-gradient(135deg, #f0ebe4 0%, #e7dfd6 100%);
+  }
+
+  .search-modal-result-copy {
+    @apply min-w-0 flex-1;
+  }
+
+  .search-modal-result-name {
+    @apply block truncate;
+    font-family: var(--font-brand);
+    font-size: 0.9rem;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+  }
+
+  .search-modal-result-meta {
+    @apply mt-0.5 block truncate uppercase;
+    font-family: var(--font-nav);
+    font-size: 0.62rem;
+    letter-spacing: 0.16em;
+    color: rgba(31, 31, 31, 0.48);
+  }
+
+  .search-modal-result-price {
+    @apply shrink-0 whitespace-nowrap;
+    font-family: var(--font-brand);
+    font-size: 0.78rem;
+    letter-spacing: 0.03em;
+    color: rgba(31, 31, 31, 0.72);
+  }
+
   .lux-hero {
     @apply relative min-h-screen overflow-hidden text-white;
     background-color: var(--color-brand-secondary);

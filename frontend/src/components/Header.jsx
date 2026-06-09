@@ -12,6 +12,7 @@ import {
 import { useCustomerContent } from '../context/CustomerContentContext';
 import { useGlobalContext } from '../context/GlobalContext';
 import CustomerProfileMenu from './customer/CustomerProfileMenu';
+import SearchModal from './search/SearchModal';
 import Logo from './ui/Logo';
 
 const formatBadgeCount = (count) => (count > 9 ? '9+' : count);
@@ -57,6 +58,7 @@ const Header = () => {
   const { navItems } = useCustomerContent();
   const { wishlistCount, cartCount, isLoggedIn } = useGlobalContext();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const isHomePage = location.pathname === '/';
   const isDarkHeaderPage =
     location.pathname.startsWith('/collections') ||
@@ -73,6 +75,7 @@ const Header = () => {
 
   useEffect(() => {
     setMobileMenuOpen(false);
+    setSearchOpen(false);
   }, [location.pathname]);
 
   return (
@@ -106,7 +109,13 @@ const Header = () => {
 
         <div className="flex flex-1 items-center justify-end gap-2 md:gap-3">
           <div className={`site-header-icons ${headerToneClass}`}>
-            <button type="button" className="site-header-icon-btn" aria-label="Search">
+            <button
+              type="button"
+              className="site-header-icon-btn"
+              aria-label="Search"
+              aria-expanded={searchOpen}
+              onClick={() => setSearchOpen(true)}
+            >
               <HiOutlineSearch size={19} strokeWidth={1.6} />
             </button>
             <HeaderIconLink
@@ -178,6 +187,8 @@ const Header = () => {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <SearchModal open={searchOpen} onClose={() => setSearchOpen(false)} />
     </motion.header>
   );
 };

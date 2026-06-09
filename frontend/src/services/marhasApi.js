@@ -16,6 +16,13 @@ export const productsService = {
     return unwrap(response);
   },
 
+  async search(query, params = {}) {
+    const response = await api.get('/products/search', {
+      params: { q: query, limit: 8, ...params }
+    });
+    return unwrap(response);
+  },
+
   async create(formData) {
     const response = await adminApi.post('/products', formData, {
       headers: { 'Content-Type': 'multipart/form-data' }

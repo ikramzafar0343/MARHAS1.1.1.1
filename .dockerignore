@@ -12,7 +12,8 @@ logs
 **/logs
 .git
 .gitignore
-frontend
+frontend/node_modules
+frontend/dist
 *.md
 Backend/src/uploads/*
 !Backend/src/uploads/.gitkeep

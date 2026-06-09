@@ -5,5 +5,6 @@ node_modules/
 coverage/
 logs/
 *.log
+public/
 src/uploads/*
 !src/uploads/.gitkeep

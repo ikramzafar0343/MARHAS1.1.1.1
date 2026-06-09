@@ -1,11 +1,22 @@
 import express from 'express';
 import path from 'path';
-import { readFileSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import swaggerUi from 'swagger-ui-express';
 import { env } from './config/env.js';
 import { applySecurityMiddleware } from './middlewares/security.middleware.js';
 import { notFoundHandler, errorHandler } from './middlewares/error.middleware.js';
 import apiRoutes from './routes/index.js';
+
+const FRONTEND_DIST_DIR = path.resolve(process.cwd(), 'public');
+const FRONTEND_INDEX = path.join(FRONTEND_DIST_DIR, 'index.html');
+
+const shouldServeFrontend = () =>
+  env.NODE_ENV === 'production' && existsSync(FRONTEND_INDEX);
+
+const isBackendOnlyPath = (requestPath) =>
+  requestPath.startsWith(env.API_PREFIX) ||
+  requestPath.startsWith('/uploads') ||
+  requestPath.startsWith('/api-docs');
 
 export const createApp = () => {
   const app = express();
@@ -23,6 +34,26 @@ export const createApp = () => {
   }
 
   app.use(env.API_PREFIX, apiRoutes);
+
+  if (shouldServeFrontend()) {
+    app.use(express.static(FRONTEND_DIST_DIR));
+
+    app.get(/^(?!\/api\/|\/uploads\/|\/api-docs).*/, (req, res, next) => {
+      if (req.method !== 'GET' && req.method !== 'HEAD') {
+        return next();
+      }
+
+      if (isBackendOnlyPath(req.path)) {
+        return next();
+      }
+
+      return res.sendFile(FRONTEND_INDEX, (error) => {
+        if (error) {
+          next(error);
+        }
+      });
+    });
+  }
 
   app.use(notFoundHandler);
   app.use(errorHandler);

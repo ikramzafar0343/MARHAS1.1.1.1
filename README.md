@@ -180,7 +180,9 @@ When the backend is running:
 
 ## Deploy on Render
 
-This repo includes a [`render.yaml`](./render.yaml) Blueprint to deploy **two services**: API (Web Service) and Frontend (Static Site).
+This repo deploys as **one Docker service** — API and React frontend on the same URL (e.g. `https://marhas.onrender.com`).
+
+The root [`Dockerfile`](./Dockerfile) builds the frontend and serves it from the Express server at `/`.
 
 ### Step 1 — MongoDB Atlas
 
@@ -193,13 +195,11 @@ This repo includes a [`render.yaml`](./render.yaml) Blueprint to deploy **two se
 1. Push this repo to GitHub.
 2. In [Render Dashboard](https://dashboard.render.com/) → **New** → **Blueprint**.
 3. Connect `ikramzafar0343/MARHAS1.1.1.1`.
-4. Render will detect `render.yaml` and create:
-   - `marhas-api` — Node web service (`Backend/`)
-   - `marhas-frontend` — Static site (`frontend/`)
+4. Render will detect `render.yaml` and create one **Docker web service** (`marhas`).
 
 ### Step 3 — Set environment variables
 
-**Backend (`marhas-api`):**
+**Service (`marhas`):**
 
 ```
 NODE_ENV=production
@@ -207,22 +207,16 @@ MONGODB_URI=mongodb+srv://<user>:<pass>@<cluster>.mongodb.net/?retryWrites=true&
 DATABASE_NAME=marhas
 JWT_ACCESS_SECRET=<random-32+-char-string>
 JWT_REFRESH_SECRET=<random-32+-char-string>
-CORS_ORIGIN=https://<your-frontend>.onrender.com
-APP_URL=https://<your-frontend>.onrender.com
+CORS_ORIGIN=https://marhas.onrender.com
+APP_URL=https://marhas.onrender.com
 STORAGE_PROVIDER=cloudinary
 CLOUDINARY_CLOUD_NAME=<your-cloud-name>
 CLOUDINARY_API_KEY=<your-api-key>
 CLOUDINARY_API_SECRET=<your-api-secret>
 ```
 
-**Frontend (`marhas-frontend`):**
-
-```
-VITE_API_URL=https://<your-api>.onrender.com/api/v1
-VITE_ASSET_URL=https://<your-api>.onrender.com
-```
-
-> Render injects `PORT` automatically for the API. Do not hardcode it in production.
+> `VITE_API_URL` is not needed — the Docker build uses `/api/v1` on the same domain.
+> Render injects `PORT` automatically. Do not hardcode it in production.
 
 ### Step 4 — Seed production data (optional)
 
@@ -296,8 +290,9 @@ Config file: [`frontend/railway.toml`](./frontend/railway.toml)
 
 | Error | Fix |
 |-------|-----|
-| `open Dockerfile: no such file or directory` | Use **Option B** above (root `Dockerfile`), or set Railway **Root Directory** to `Backend` and builder to **Nixpacks** |
-| API starts but frontend cannot connect | Set `VITE_API_URL` and `VITE_ASSET_URL` to your live backend URL (with `https://`) |
+| `open Dockerfile: no such file or directory` | Pull latest `main` — root `Dockerfile` is included |
+| `Route / not found` JSON on homepage | Redeploy latest `main` — frontend is now bundled in the Docker image |
+| API starts but frontend cannot connect | Redeploy; single-service build uses `/api/v1` on the same domain |
 | CORS errors in browser | Add your exact frontend URL to backend `CORS_ORIGIN` |
 | Uploads disappear after redeploy | Set `STORAGE_PROVIDER=cloudinary` (local disk is ephemeral on cloud hosts) |
 | `MONGODB_URI is required` | Add MongoDB Atlas connection string in service environment variables |

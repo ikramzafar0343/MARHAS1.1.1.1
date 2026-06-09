@@ -50,4 +50,18 @@ if (!parsed.success) {
 
 export const env = parsed.data;
 
-export const corsOrigins = env.CORS_ORIGIN.split(',').map((origin) => origin.trim());
+const normalizeOrigin = (value) => value?.replace(/\/$/, '') || '';
+
+const configuredOrigins = env.CORS_ORIGIN.split(',')
+  .map((origin) => normalizeOrigin(origin.trim()))
+  .filter(Boolean);
+
+const derivedOrigins = [
+  normalizeOrigin(env.APP_URL),
+  normalizeOrigin(process.env.RENDER_EXTERNAL_URL),
+  normalizeOrigin(process.env.RAILWAY_PUBLIC_DOMAIN
+    ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
+    : '')
+].filter(Boolean);
+
+export const corsOrigins = [...new Set([...configuredOrigins, ...derivedOrigins])];

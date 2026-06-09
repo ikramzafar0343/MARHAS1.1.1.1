@@ -9,6 +9,8 @@ import rateLimit from 'express-rate-limit';
 import { corsOrigins, env } from '../config/env.js';
 import { requestLogger } from './requestLogger.middleware.js';
 
+const normalizeOrigin = (value = '') => value.replace(/\/$/, '');
+
 export const applySecurityMiddleware = (app) => {
   app.set('trust proxy', 1);
 
@@ -18,20 +20,22 @@ export const applySecurityMiddleware = (app) => {
     })
   );
 
-  app.use(
-    cors({
-      origin: (origin, callback) => {
-        if (!origin || corsOrigins.includes(origin)) {
-          callback(null, true);
-          return;
-        }
-        callback(new Error('Not allowed by CORS'));
-      },
-      credentials: true,
-      methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization']
-    })
-  );
+  const apiCors = cors({
+    origin: (origin, callback) => {
+      if (!origin || corsOrigins.includes(normalizeOrigin(origin))) {
+        callback(null, true);
+        return;
+      }
+      callback(new Error('Not allowed by CORS'));
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+  });
+
+  // CORS applies to API calls only — not same-origin static assets (JS/CSS/images)
+  app.use(env.API_PREFIX, apiCors);
+  app.options(`${env.API_PREFIX}/*`, apiCors);
 
   app.use(compression());
   app.use(express.json({ limit: '10mb' }));

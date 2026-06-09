@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "optimize:heroes": "node scripts/optimize-hero-images.mjs",
     "optimize:categories": "node scripts/optimize-category-images.mjs",
-    "optimize:images": "npm run optimize:heroes && npm run optimize:categories"
+    "optimize:images": "npm run optimize:heroes && npm run optimize:categories",
+    "optimize:favicons": "node scripts/optimize-favicons.mjs"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.0",

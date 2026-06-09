@@ -1,0 +1,174 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "MARHAS E-Commerce API",
+    "description": "Production-ready REST API for MARHAS luxury fashion platform",
+    "version": "1.0.0",
+    "contact": { "email": "contact@marhas.com" }
+  },
+  "servers": [{ "url": "http://localhost:5000/api/v1", "description": "Local" }],
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": { "type": "http", "scheme": "bearer", "bearerFormat": "JWT" }
+    },
+    "schemas": {
+      "SuccessResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean", "example": true },
+          "message": { "type": "string" },
+          "data": { "type": "object" },
+          "meta": { "type": "object" }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean", "example": false },
+          "message": { "type": "string" },
+          "errors": { "type": "array", "items": { "type": "object" } }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": ["Health"],
+        "summary": "Health check",
+        "responses": { "200": { "description": "API is healthy" } }
+      }
+    },
+    "/auth/register": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Register customer",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name", "email", "password"],
+                "properties": {
+                  "name": { "type": "string" },
+                  "email": { "type": "string", "format": "email" },
+                  "password": { "type": "string", "minLength": 8 }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "User registered" }, "400": { "description": "Validation error" } }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Customer login",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email", "password"],
+                "properties": {
+                  "email": { "type": "string" },
+                  "password": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Login successful" } }
+      }
+    },
+    "/auth/admin/login": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Admin login",
+        "responses": { "200": { "description": "Admin tokens issued" } }
+      }
+    },
+    "/auth/me": {
+      "get": {
+        "tags": ["Auth"],
+        "summary": "Current user profile",
+        "security": [{ "BearerAuth": [] }],
+        "responses": { "200": { "description": "Profile returned" } }
+      }
+    },
+    "/products": {
+      "get": {
+        "tags": ["Products"],
+        "summary": "List products",
+        "parameters": [
+          { "name": "page", "in": "query", "schema": { "type": "integer" } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer" } },
+          { "name": "category", "in": "query", "schema": { "type": "string" } },
+          { "name": "search", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Product list" } }
+      },
+      "post": {
+        "tags": ["Products"],
+        "summary": "Create product",
+        "security": [{ "BearerAuth": [] }],
+        "responses": { "201": { "description": "Product created" } }
+      }
+    },
+    "/products/best-sellers": {
+      "get": { "tags": ["Products"], "summary": "Best sellers", "responses": { "200": { "description": "Best sellers" } } }
+    },
+    "/products/{id}": {
+      "get": {
+        "tags": ["Products"],
+        "summary": "Product detail",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Product detail" } }
+      }
+    },
+    "/orders": {
+      "post": {
+        "tags": ["Orders"],
+        "summary": "Place order (checkout)",
+        "responses": { "201": { "description": "Order created" } }
+      }
+    },
+    "/content/storefront": {
+      "get": { "tags": ["Storefront"], "summary": "Published storefront CMS", "responses": { "200": { "description": "CMS content" } } }
+    },
+    "/admin/orders": {
+      "get": {
+        "tags": ["Admin Orders"],
+        "summary": "List orders",
+        "security": [{ "BearerAuth": [] }],
+        "responses": { "200": { "description": "Orders list" } }
+      }
+    },
+    "/admin/inventory": {
+      "get": {
+        "tags": ["Inventory"],
+        "summary": "Inventory list",
+        "security": [{ "BearerAuth": [] }],
+        "responses": { "200": { "description": "Inventory items" } }
+      }
+    },
+    "/admin/analytics/kpis": {
+      "get": {
+        "tags": ["Analytics"],
+        "summary": "Analytics KPIs",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "period", "in": "query", "schema": { "type": "string", "enum": ["7d", "30d", "90d"] } }],
+        "responses": { "200": { "description": "KPI data" } }
+      }
+    },
+    "/newsletter/subscribe": {
+      "post": {
+        "tags": ["Newsletter"],
+        "summary": "Subscribe to newsletter",
+        "responses": { "201": { "description": "Subscribed" } }
+      }
+    }
+  }
+}

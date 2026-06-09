@@ -1,0 +1,52 @@
+/*
+ * Nourd is a licensed font — add your .woff2 files to public/fonts/ then
+ * uncomment the url() lines below (one file per weight is enough).
+ *
+ * Until then, the site uses Plus Jakarta Sans (--font-brand fallback).
+ * Using url() without real files causes console errors: the server returns
+ * HTML (404) and Chrome reports "OTS parsing error: invalid sfntVersion".
+ */
+
+@font-face {
+  font-family: 'Nourd';
+  src:
+    local('Nourd Regular'),
+    local('Nourd-Regular');
+    /* url('/fonts/Nourd-Regular.woff2') format('woff2'); */
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Nourd';
+  src:
+    local('Nourd Medium'),
+    local('Nourd-Medium');
+    /* url('/fonts/Nourd-Medium.woff2') format('woff2'); */
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Nourd';
+  src:
+    local('Nourd SemiBold'),
+    local('Nourd-SemiBold');
+    /* url('/fonts/Nourd-SemiBold.woff2') format('woff2'); */
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Nourd';
+  src:
+    local('Nourd Bold'),
+    local('Nourd-Bold');
+    /* url('/fonts/Nourd-Bold.woff2') format('woff2'); */
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}

@@ -29,6 +29,16 @@ const shutdown = async (signal) => {
 const start = async () => {
   await connectDatabase();
 
+  if (env.SYNC_DEFAULT_MEDIA) {
+    const { resetBrokenMedia } = await import('./database/resetContent.js');
+    await resetBrokenMedia();
+    logger.info('SYNC_DEFAULT_MEDIA enabled — storefront and broken upload images were reset');
+  } else if (env.NODE_ENV === 'production' && env.STORAGE_PROVIDER === 'local') {
+    logger.warn(
+      'STORAGE_PROVIDER=local on production uses ephemeral disk — configure Cloudinary for persistent uploads'
+    );
+  }
+
   server = app.listen(env.PORT, () => {
     logger.info(
       `MARHAS API server started — http://localhost:${env.PORT}${env.API_PREFIX} (${env.NODE_ENV})`

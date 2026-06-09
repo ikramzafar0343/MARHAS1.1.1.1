@@ -38,7 +38,11 @@ const envSchema = z.object({
   AWS_S3_BUCKET: z.string().optional(),
   SEED_ADMIN_EMAIL: z.string().email().default('admin@marhas.com'),
   SEED_ADMIN_PASSWORD: z.string().min(8).default('Marhas@Admin123'),
-  SEED_ADMIN_NAME: z.string().default('MARHAS Admin')
+  SEED_ADMIN_NAME: z.string().default('MARHAS Admin'),
+  SYNC_DEFAULT_MEDIA: z
+    .string()
+    .optional()
+    .transform((value) => value === 'true')
 });
 
 const parsed = envSchema.safeParse(process.env);

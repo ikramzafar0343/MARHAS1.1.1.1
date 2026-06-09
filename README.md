@@ -294,6 +294,7 @@ Config file: [`frontend/railway.toml`](./frontend/railway.toml)
 | `Route / not found` JSON on homepage | Redeploy latest `main` — frontend is now bundled in the Docker image |
 | API starts but frontend cannot connect | Redeploy; single-service build uses `/api/v1` on the same domain |
 | CORS errors in browser | Add your exact frontend URL to backend `CORS_ORIGIN` |
+| Upload images return **404** on Render | Local uploads from dev are not on the server. Set `SYNC_DEFAULT_MEDIA=true`, redeploy once, then remove it — or run `npm run reset:content` in Render Shell |
 | Uploads disappear after redeploy | Set `STORAGE_PROVIDER=cloudinary` (local disk is ephemeral on cloud hosts) |
 | `MONGODB_URI is required` | Add MongoDB Atlas connection string in service environment variables |
 

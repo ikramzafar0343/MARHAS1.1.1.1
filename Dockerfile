@@ -12,7 +12,8 @@ COPY frontend/ .
 ENV VITE_API_URL=/api/v1
 ENV VITE_ASSET_URL=
 
-RUN npm run build
+# Bust layer cache when frontend changes; always produce fresh dist assets
+RUN npm run build && test -f dist/index.html && test -d dist/assets
 
 FROM node:20-alpine AS base
 

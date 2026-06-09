@@ -292,6 +292,7 @@ Config file: [`frontend/railway.toml`](./frontend/railway.toml)
 |-------|-----|
 | `open Dockerfile: no such file or directory` | Pull latest `main` — root `Dockerfile` is included |
 | `Route / not found` JSON on homepage | Redeploy latest `main` — frontend is now bundled in the Docker image |
+| CSS MIME type `text/html` error | Hard refresh after redeploy — stale `index.html` was requesting old `/assets/*.css`; server now returns 404 for missing assets instead of HTML |
 | API starts but frontend cannot connect | Redeploy; single-service build uses `/api/v1` on the same domain |
 | CORS errors in browser | Add your exact frontend URL to backend `CORS_ORIGIN` |
 | Upload images return **404** on Render | Local uploads from dev are not on the server. Set `SYNC_DEFAULT_MEDIA=true`, redeploy once, then remove it — or run `npm run reset:content` in Render Shell |

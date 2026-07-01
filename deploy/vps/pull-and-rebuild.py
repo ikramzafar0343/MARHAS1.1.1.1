@@ -18,6 +18,7 @@ REMOTE_SCRIPT = r"""#!/usr/bin/env bash
 set -euo pipefail
 
 APP_DIR=/opt/marhas
+DEPLOY_USER="${MARHAS_DEPLOY_USER:-greentech}"
 cd "$APP_DIR"
 
 if [ ! -d .git ]; then
@@ -25,9 +26,15 @@ if [ ! -d .git ]; then
   exit 1
 fi
 
+echo "==> Preparing repository permissions..."
+git config --global --add safe.directory "$APP_DIR"
+if id "$DEPLOY_USER" >/dev/null 2>&1; then
+  chown -R "$DEPLOY_USER:$DEPLOY_USER" "$APP_DIR/.git" "$APP_DIR/frontend" "$APP_DIR/deploy" 2>/dev/null || true
+fi
+
 echo "==> Pulling latest code..."
-git fetch origin
-git reset --hard "origin/__BRANCH__"
+git -c safe.directory="$APP_DIR" fetch origin
+git -c safe.directory="$APP_DIR" reset --hard "origin/__BRANCH__"
 
 echo "==> Rotating JWT secrets..."
 ENV_FILE="$APP_DIR/Backend/.env"
@@ -70,7 +77,7 @@ echo "==> Publishing static assets..."
 cd "$APP_DIR/Backend"
 rm -rf public
 cp -r "$APP_DIR/frontend/dist" public
-chown -R www-data:www-data "$APP_DIR"
+chown -R www-data:www-data "$APP_DIR/Backend"
 
 echo "==> Restarting service..."
 systemctl restart marhas

@@ -23,7 +23,7 @@ const backendBase = () => {
     return window.location.origin;
   }
 
-  return 'http://localhost:5000';
+  return import.meta.env.PROD ? '' : 'http://localhost:5000';
 };
 
 const toUploadPath = (value) => {

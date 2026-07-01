@@ -5,7 +5,11 @@ import {
   setCustomerToken
 } from './tokenStorage';
 
-const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1';
+const configuredApiUrl = import.meta.env.VITE_API_URL?.trim();
+
+const baseURL =
+  configuredApiUrl ||
+  (import.meta.env.DEV ? 'http://localhost:5000/api/v1' : '/api/v1');
 
 const AUTH_PATHS_WITHOUT_REFRESH = [
   '/auth/login',

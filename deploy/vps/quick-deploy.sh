@@ -1,19 +1,8 @@
 #!/usr/bin/env bash
-# Run ONCE on VPS after SSH login as root:
+# Run ONCE on VPS after SSH login:
 #   curl -fsSL https://raw.githubusercontent.com/ikramzafar0343/MARHAS1.1.1.1/main/deploy/vps/quick-deploy.sh | sudo bash
-#
-# Before running: set MONGODB password below (Atlas user MARHAS)
 
 set -euo pipefail
-
-DB_PASSWORD="${MARHAS_DB_PASSWORD:-}"
-
-if [[ -z "$DB_PASSWORD" ]]; then
-  echo "Set your MongoDB Atlas password first:"
-  echo "  export MARHAS_DB_PASSWORD='your_atlas_password'"
-  echo "  curl -fsSL ... | sudo -E bash"
-  exit 1
-fi
 
 curl -fsSL https://raw.githubusercontent.com/ikramzafar0343/MARHAS1.1.1.1/main/deploy/vps/setup-marhas.sh -o /tmp/setup-marhas.sh
 chmod +x /tmp/setup-marhas.sh
@@ -26,7 +15,7 @@ cat > /opt/marhas/Backend/.env <<EOF
 NODE_ENV=production
 PORT=5000
 API_PREFIX=/api/v1
-MONGODB_URI=mongodb+srv://MARHAS:${DB_PASSWORD}@marhas.sacclb7.mongodb.net/marhas?retryWrites=true&w=majority&appName=MARHAS
+MONGODB_URI=mongodb://127.0.0.1:27017/marhas
 DATABASE_NAME=marhas
 JWT_ACCESS_SECRET=${JWT_ACCESS}
 JWT_REFRESH_SECRET=${JWT_REFRESH}

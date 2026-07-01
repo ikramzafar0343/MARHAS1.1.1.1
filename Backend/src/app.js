@@ -86,7 +86,9 @@ export const createApp = () => {
   try {
     const openapiPath = path.resolve(process.cwd(), 'swagger/openapi.json');
     const openapiDocument = JSON.parse(readFileSync(openapiPath, 'utf8'));
-    app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(openapiDocument));
+    if (env.NODE_ENV !== 'production') {
+      app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(openapiDocument));
+    }
   } catch {
     // Swagger spec optional until file is present
   }

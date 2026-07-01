@@ -8,4 +8,8 @@ export default defineConfig({
     react(),
     tailwindcss(),
   ],
+  envPrefix: 'VITE_',
+  build: {
+    sourcemap: false,
+  },
 });

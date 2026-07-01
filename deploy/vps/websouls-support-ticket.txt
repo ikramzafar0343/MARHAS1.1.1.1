@@ -1,0 +1,32 @@
+
+Subject: URGENT - marhas.pk not resolving on Pakistani ISP/mobile networks (NXDOMAIN)
+
+Hello WebSouls Support,
+
+I registered marhas.pk through WebSouls. The domain is not opening on Pakistani mobile networks, WiFi, Android, or iPhone. Browsers show DNS_PROBE_FINISHED_NXDOMAIN / "server can't be found".
+
+Current status:
+- Domain: marhas.pk
+- VPS IP (website host): 132.148.73.92
+- Nameservers currently set to Cloudflare: conrad.ns.cloudflare.com, selah.ns.cloudflare.com
+- marhas.pk resolves correctly on Google DNS (8.8.8.8) and Cloudflare DNS (1.1.1.1)
+- marhas.pk returns NXDOMAIN on Pakistani ISP DNS (202.163.69.21)
+- PKNIC root servers show Cloudflare nameservers correctly
+- Website is live and working on the VPS with SSL (Let's Encrypt)
+
+Please do ONE of the following:
+
+OPTION A (Preferred):
+Change marhas.pk nameservers from Cloudflare to WebSouls DNS servers, and add these DNS records:
+  A    @      132.148.73.92
+  A    www    132.148.73.92
+
+OPTION B:
+Keep Cloudflare nameservers but verify and push full PKNIC propagation so Pakistani ISP DNS resolvers (including 202.163.69.21) can resolve marhas.pk.
+
+The website must work on marhas.pk for all users in Pakistan without changing DNS on their phones or laptops.
+
+Account email: [YOUR WEBSOULS EMAIL]
+Domain: marhas.pk
+
+Thank you.

@@ -17,7 +17,18 @@ fi
 echo "==> Installing system packages..."
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
-apt-get install -y -qq git curl ca-certificates nginx certbot python3-certbot-nginx
+apt-get install -y -qq git curl ca-certificates gnupg nginx certbot python3-certbot-nginx
+
+echo "==> Installing MongoDB (local)..."
+if ! command -v mongod >/dev/null 2>&1; then
+  curl -fsSL https://www.mongodb.org/static/pgp/server-8.0.asc | gpg -o /usr/share/keyrings/mongodb-server-8.0.gpg --dearmor
+  echo "deb [ signed-by=/usr/share/keyrings/mongodb-server-8.0.gpg ] https://repo.mongodb.org/apt/ubuntu noble/mongodb-org/8.0 multiverse" \
+    > /etc/apt/sources.list.d/mongodb-org-8.0.list
+  apt-get update -qq
+  apt-get install -y -qq mongodb-org
+fi
+systemctl enable mongod
+systemctl start mongod
 
 if ! command -v node >/dev/null 2>&1 || [[ "$(node -v | cut -d. -f1 | tr -d v)" -lt 20 ]]; then
   echo "==> Installing Node.js 20..."

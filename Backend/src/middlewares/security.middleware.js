@@ -15,6 +15,7 @@ export const applySecurityMiddleware = (app) => {
   app.set('trust proxy', 1);
 
   const cspDirectives = helmet.contentSecurityPolicy.getDefaultDirectives();
+  cspDirectives['connect-src'] = ["'self'"];
   cspDirectives['img-src'] = ["'self'", 'data:', 'blob:'];
 
   if (env.STORAGE_PROVIDER === 'cloudinary' && env.CLOUDINARY_CLOUD_NAME) {

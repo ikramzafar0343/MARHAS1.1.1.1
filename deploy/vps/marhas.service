@@ -1,6 +1,7 @@
 [Unit]
 Description=MARHAS API and storefront
-After=network.target
+After=network.target mongod.service
+Requires=mongod.service
 
 [Service]
 Type=simple

@@ -5,6 +5,7 @@ node_modules/
 .env
 .env.*
 !.env.example
+!.env.production
 
 # Build output
 dist/
@@ -38,3 +39,9 @@ Thumbs.db
 
 # Test artifacts
 *.local
+Backend/coverage/
+__pycache__/
+*.pyc
+
+# Deploy runtime logs (may contain sensitive output)
+deploy/vps/deploy-log.txt

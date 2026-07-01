@@ -1,13 +1,2 @@
-export const SEED_ADMIN = {
-  email: 'admin@marhas.com',
-  password: 'marhas123',
-  name: 'MARHAS Admin'
-};
-
-export const validateAdminCredentials = (email, password) => {
-  const normalizedEmail = email?.trim().toLowerCase() || '';
-
-  return (
-    normalizedEmail === SEED_ADMIN.email.toLowerCase() && password === SEED_ADMIN.password
-  );
-};
+/** Default admin email placeholder for the login form (auth is server-side). */
+export const DEFAULT_ADMIN_EMAIL = 'admin@marhas.com';

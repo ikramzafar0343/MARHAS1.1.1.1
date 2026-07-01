@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { SEED_ADMIN } from '../../constants/adminSeed';
+import { DEFAULT_ADMIN_EMAIL } from '../../constants/adminSeed';
 import { useAdminContext } from '../../context/AdminContext';
 import BrandWordmark from '../ui/BrandWordmark';
 import AuthPasswordField from './AuthPasswordField';
@@ -8,7 +8,7 @@ import AuthPasswordField from './AuthPasswordField';
 const AdminLoginForm = () => {
   const navigate = useNavigate();
   const { adminLogin } = useAdminContext();
-  const [email, setEmail] = useState(SEED_ADMIN.email);
+  const [email, setEmail] = useState(DEFAULT_ADMIN_EMAIL);
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);

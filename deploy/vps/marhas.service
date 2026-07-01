@@ -1,0 +1,20 @@
+[Unit]
+Description=MARHAS API and storefront
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/marhas/Backend
+EnvironmentFile=/opt/marhas/Backend/.env
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/node --max-old-space-size=384 src/server.js
+Restart=on-failure
+RestartSec=5
+
+# Hardening
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

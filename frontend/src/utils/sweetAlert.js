@@ -51,12 +51,12 @@ const commerceToast = Swal.mixin({
   toast: true,
   position: 'top-end',
   showConfirmButton: false,
-  timer: 2400,
-  timerProgressBar: true,
+  showCloseButton: false,
+  timer: 2000,
+  timerProgressBar: false,
   customClass: {
     popup: 'marhas-swal-toast',
-    title: 'marhas-swal-toast-title',
-    timerProgressBar: 'marhas-swal-toast-progress'
+    title: 'marhas-swal-toast-title'
   },
   didOpen: (toast) => {
     toast.addEventListener('mouseenter', Swal.stopTimer);
@@ -65,5 +65,5 @@ const commerceToast = Swal.mixin({
 });
 
 export const showCommerceToast = (title) => {
-  void commerceToast.fire({ icon: 'success', title });
+  void commerceToast.fire({ icon: undefined, title });
 };

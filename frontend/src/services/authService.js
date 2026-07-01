@@ -23,10 +23,20 @@ export const authService = {
     return data;
   },
 
-  async adminLogin({ email, password }) {
+  async adminRequestLogin({ email, password }) {
     const response = await adminApi.post('/auth/admin/login', { email, password });
+    return unwrap(response);
+  },
+
+  async adminVerifyOtp({ challengeId, otp }) {
+    const response = await adminApi.post('/auth/admin/login/verify-otp', { challengeId, otp });
     const data = unwrap(response);
     setAdminToken(data.accessToken);
+    return data;
+  },
+
+  async adminLogin({ email, password }) {
+    const data = await this.adminRequestLogin({ email, password });
     return data;
   },
 

@@ -17,7 +17,12 @@ export const login = asyncHandler(async (req, res) => {
 });
 
 export const adminLogin = asyncHandler(async (req, res) => {
-  const data = await authService.login(req.body, req, res, { adminOnly: true });
+  const data = await authService.requestAdminLogin(req.body);
+  return successResponse(res, { message: data.message, data });
+});
+
+export const adminVerifyOtp = asyncHandler(async (req, res) => {
+  const data = await authService.verifyAdminLoginOtp(req.body, req, res);
   return successResponse(res, { message: 'Admin login successful', data });
 });
 

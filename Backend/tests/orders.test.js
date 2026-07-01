@@ -5,6 +5,7 @@ import { User } from '../src/modules/users/user.model.js';
 import { Order } from '../src/modules/orders/order.model.js';
 import { ORDER_STATUS } from '../src/constants/orderStatus.js';
 import { ROLES } from '../src/constants/roles.js';
+import { loginAdmin } from './helpers/adminAuth.js';
 
 describe('Orders API', () => {
   const app = createApp();
@@ -90,13 +91,10 @@ describe('Orders API', () => {
       isEmailVerified: true
     });
 
-    const login = await request(app).post('/api/v1/auth/admin/login').send({
+    const token = await loginAdmin(app, {
       email: 'admin@marhas.com',
       password: 'AdminPass123'
     });
-
-    expect(login.status).toBe(200);
-    const token = login.body.data.accessToken;
 
     const checkout = await request(app)
       .post('/api/v1/orders')
@@ -163,11 +161,10 @@ describe('Orders API', () => {
     const legacyProduct = await Product.findOne({ sku: 'M.LEGACY' });
     const legacyProductId = legacyProduct._id.toString();
 
-    const login = await request(app).post('/api/v1/auth/admin/login').send({
+    const token = await loginAdmin(app, {
       email: 'admin@marhas.com',
       password: 'AdminPass123'
     });
-    const token = login.body.data.accessToken;
 
     const checkout = await request(app)
       .post('/api/v1/orders')

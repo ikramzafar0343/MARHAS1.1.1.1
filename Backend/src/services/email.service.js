@@ -72,6 +72,16 @@ export const emailTemplates = {
       <p>Your account is ready. Explore our latest collections, save favourites to your wishlist, and enjoy a seamless checkout experience.</p>
       <a class="button" href="${env.APP_URL}">Shop Collections</a>
       <p>We are delighted to have you with us.</p>
+    `),
+
+  adminLoginOtp: ({ adminName, adminEmail, otp, expiresMinutes }) =>
+    wrapTemplate(`
+      <h1>Admin sign-in code</h1>
+      <p>A sign-in attempt was made for the MARHAS admin portal.</p>
+      <p><strong>Admin:</strong> ${adminName || 'MARHAS Admin'} (${adminEmail})</p>
+      <p style="font-size: 28px; letter-spacing: 0.35em; text-align: center; margin: 24px 0; color: ${BRAND_COLOR};">${otp}</p>
+      <p>Enter this verification code to complete admin access. It expires in ${expiresMinutes} minutes.</p>
+      <p>If you did not attempt to sign in, secure your admin account immediately.</p>
     `)
 };
 
@@ -150,6 +160,23 @@ export class EmailService {
 
   getResetExpiry() {
     return new Date(Date.now() + 60 * 60 * 1000);
+  }
+
+  getAdminOtpExpiry() {
+    return new Date(Date.now() + 10 * 60 * 1000);
+  }
+
+  async sendAdminLoginOtpEmail({ to, adminName, adminEmail, otp }) {
+    return this.sendMail({
+      to,
+      subject: 'MARHAS admin sign-in verification code',
+      html: emailTemplates.adminLoginOtp({
+        adminName,
+        adminEmail,
+        otp,
+        expiresMinutes: 10
+      })
+    });
   }
 
   async sendVerificationEmail({ to, name, token }) {

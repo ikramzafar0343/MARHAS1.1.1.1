@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { FaEnvelope, FaMapMarkerAlt, FaPhoneAlt } from 'react-icons/fa';
+import { SUPPORT_EMAIL } from '../constants/contact';
 import { Container } from '../components/ui/Layout';
 import SectionIntro from '../components/ui/SectionIntro';
 import BrandWordmark from '../components/ui/BrandWordmark';
@@ -29,8 +30,8 @@ const contactDetails = [
     Icon: FaEnvelope,
     label: 'Email',
     value: (
-      <a href="mailto:contact@marhas.com" className="info-page-link">
-        contact@marhas.com
+      <a href={`mailto:${SUPPORT_EMAIL}`} className="info-page-link">
+        {SUPPORT_EMAIL}
       </a>
     )
   }

@@ -173,6 +173,44 @@ export class UserRepository {
       .exec();
   }
 
+  async setAdminLoginOtp(id, { challengeId, otpHash, expiresAt }) {
+    return this.model
+      .findByIdAndUpdate(
+        id,
+        {
+          adminLoginChallengeId: challengeId,
+          adminLoginOtpHash: otpHash,
+          adminLoginOtpExpires: expiresAt
+        },
+        { returnDocument: 'after', runValidators: true }
+      )
+      .exec();
+  }
+
+  async findByAdminLoginChallenge(challengeId) {
+    return this.model
+      .findOne({
+        adminLoginChallengeId: challengeId,
+        adminLoginOtpExpires: { $gt: new Date() }
+      })
+      .select('+adminLoginOtpHash +adminLoginOtpExpires +adminLoginChallengeId')
+      .exec();
+  }
+
+  async clearAdminLoginOtp(id) {
+    return this.model
+      .findByIdAndUpdate(
+        id,
+        {
+          adminLoginChallengeId: null,
+          adminLoginOtpHash: null,
+          adminLoginOtpExpires: null
+        },
+        { returnDocument: 'after', runValidators: true }
+      )
+      .exec();
+  }
+
   async addRefreshToken(id, tokenEntry) {
     return this.model
       .findByIdAndUpdate(

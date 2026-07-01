@@ -4,7 +4,7 @@
     "title": "MARHAS E-Commerce API",
     "description": "Production-ready REST API for MARHAS luxury fashion platform",
     "version": "1.0.0",
-    "contact": { "email": "contact@marhas.com" }
+    "contact": { "email": "support@marhas.pk" }
   },
   "servers": [{ "url": "http://localhost:5000/api/v1", "description": "Local" }],
   "components": {

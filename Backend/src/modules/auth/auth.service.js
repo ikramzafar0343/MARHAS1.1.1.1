@@ -1,3 +1,5 @@
+import crypto from 'node:crypto';
+import bcrypt from 'bcrypt';
 import { User } from '../users/user.model.js';
 import { UserRepository } from '../users/user.repository.js';
 import { ADMIN_ROLES, ROLES } from '../../constants/roles.js';
@@ -111,6 +113,83 @@ export class AuthService {
     } catch (error) {
       logger.warn({ err: error.message, email: user.email }, 'Verification email failed');
     }
+
+    return this.issueAuthResponse(user, req, res);
+  }
+
+  async requestAdminLogin(data) {
+    const user = await this.userRepository.findByEmail(data.email, { includePassword: true });
+
+    if (!user || user.deletedAt) {
+      throw new AppError('Invalid email or password', 401);
+    }
+
+    if (!ADMIN_ROLES.includes(user.role)) {
+      throw new AppError('Admin access required', 403);
+    }
+
+    const isValid = await user.comparePassword(data.password);
+    if (!isValid) {
+      throw new AppError('Invalid email or password', 401);
+    }
+
+    const otp = String(crypto.randomInt(100000, 1000000));
+    const challengeId = crypto.randomBytes(24).toString('hex');
+    const otpHash = await bcrypt.hash(otp, 10);
+
+    await this.userRepository.setAdminLoginOtp(user._id, {
+      challengeId,
+      otpHash,
+      expiresAt: emailService.getAdminOtpExpiry()
+    });
+
+    try {
+      await emailService.sendAdminLoginOtpEmail({
+        to: env.SUPPORT_EMAIL,
+        adminName: user.name,
+        adminEmail: user.email,
+        otp
+      });
+    } catch (error) {
+      await this.userRepository.clearAdminLoginOtp(user._id);
+      logger.warn({ err: error.message, email: user.email }, 'Admin OTP email failed');
+      throw new AppError('Unable to send verification code. Try again shortly.', 503);
+    }
+
+    if (!emailService.isConfigured()) {
+      logger.info({ email: user.email, otp }, 'Admin OTP email skipped — SMTP not configured');
+    }
+
+    const response = {
+      requiresOtp: true,
+      challengeId,
+      message: `Verification code sent to ${env.SUPPORT_EMAIL}`
+    };
+
+    if (env.NODE_ENV === 'test') {
+      response.otp = otp;
+    } else if (env.NODE_ENV !== 'production' && !emailService.isConfigured()) {
+      response.devOtp = otp;
+    }
+
+    return response;
+  }
+
+  async verifyAdminLoginOtp({ challengeId, otp }, req, res) {
+    const user = await this.userRepository.findByAdminLoginChallenge(challengeId);
+
+    if (!user || user.deletedAt || !ADMIN_ROLES.includes(user.role)) {
+      throw new AppError('Invalid or expired verification code', 401);
+    }
+
+    const isValidOtp = await bcrypt.compare(String(otp).trim(), user.adminLoginOtpHash || '');
+    if (!isValidOtp) {
+      throw new AppError('Invalid or expired verification code', 401);
+    }
+
+    await this.userRepository.clearAdminLoginOtp(user._id);
+    await this.userRepository.updateById(user._id, { lastLoginAt: new Date() });
+    user.lastLoginAt = new Date();
 
     return this.issueAuthResponse(user, req, res);
   }

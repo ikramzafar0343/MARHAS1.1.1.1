@@ -5,6 +5,7 @@ import { ROLES } from '../src/constants/roles.js';
 import { StorefrontContent } from '../src/modules/storefront/storefront.model.js';
 import { User } from '../src/modules/users/user.model.js';
 import { STOREFRONT_DEFAULTS } from '../src/constants/storefrontDefaults.js';
+import { loginAdmin } from './helpers/adminAuth.js';
 
 describe('Storefront API', () => {
   const app = createApp();
@@ -39,15 +40,11 @@ describe('Storefront API', () => {
     });
   });
 
-  const loginAdmin = async () => {
-    const login = await request(app).post('/api/v1/auth/admin/login').send({
+  const loginAdminUser = async () =>
+    loginAdmin(app, {
       email: env.SEED_ADMIN_EMAIL,
       password: env.SEED_ADMIN_PASSWORD
     });
-
-    expect(login.status).toBe(200);
-    return login.body.data.accessToken;
-  };
 
   it('returns decoded image paths from public storefront content', async () => {
     const response = await request(app).get('/api/v1/content/storefront');
@@ -57,7 +54,7 @@ describe('Storefront API', () => {
   });
 
   it('returns admin storefront content for authenticated admin users', async () => {
-    const token = await loginAdmin();
+    const token = await loginAdminUser();
 
     const response = await request(app)
       .get('/api/v1/content/admin/storefront')
@@ -69,7 +66,7 @@ describe('Storefront API', () => {
   });
 
   it('updates storefront content without crashing the admin API', async () => {
-    const token = await loginAdmin();
+    const token = await loginAdminUser();
     const nextNavigation = STOREFRONT_DEFAULTS.navigation.filter((item) => item.slug !== 'summer');
 
     const response = await request(app)
@@ -93,7 +90,7 @@ describe('Storefront API', () => {
   });
 
   it('persists collection hero visibility and image overrides', async () => {
-    const token = await loginAdmin();
+    const token = await loginAdminUser();
     const nextCollectionHeroes = {
       ...STOREFRONT_DEFAULTS.collectionHeroes,
       summer: {
@@ -129,7 +126,7 @@ describe('Storefront API', () => {
   });
 
   it('persists auth page banner images', async () => {
-    const token = await loginAdmin();
+    const token = await loginAdminUser();
     const nextAuthPages = {
       ...STOREFRONT_DEFAULTS.authPages,
       login: {

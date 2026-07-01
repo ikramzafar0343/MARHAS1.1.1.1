@@ -4384,6 +4384,25 @@
     font-family: var(--font-body);
   }
 
+  .admin-otp-form {
+    @apply flex flex-col gap-4;
+  }
+
+  .admin-otp-copy {
+    @apply text-sm leading-relaxed text-text-muted;
+    font-family: var(--font-body);
+  }
+
+  .admin-otp-input {
+    @apply text-center text-lg tracking-[0.35em];
+    font-family: var(--font-brand);
+  }
+
+  .admin-otp-resend {
+    @apply self-start text-xs uppercase tracking-[0.12em] text-brand-primary transition-opacity hover:opacity-70 disabled:opacity-40;
+    font-family: var(--font-body);
+  }
+
   .admin-shell {
     @apply min-h-screen bg-brand-bg;
     --admin-header-height: 4.25rem;

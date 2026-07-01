@@ -3,6 +3,7 @@ import { validate } from '../../middlewares/validate.middleware.js';
 import { authenticate } from '../../middlewares/auth.middleware.js';
 import {
   adminLoginSchema,
+  adminVerifyOtpSchema,
   changePasswordSchema,
   forgotPasswordSchema,
   loginSchema,
@@ -19,6 +20,11 @@ const router = Router();
 router.post('/register', validate(registerSchema), authController.register);
 router.post('/login', validate(loginSchema), authController.login);
 router.post('/admin/login', validate(adminLoginSchema), authController.adminLogin);
+router.post(
+  '/admin/login/verify-otp',
+  validate(adminVerifyOtpSchema),
+  authController.adminVerifyOtp
+);
 router.post('/logout', authenticate, authController.logout);
 router.post('/refresh', authController.refresh);
 router.post('/forgot-password', validate(forgotPasswordSchema), authController.forgotPassword);

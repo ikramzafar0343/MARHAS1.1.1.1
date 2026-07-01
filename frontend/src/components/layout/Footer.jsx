@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { SUPPORT_EMAIL } from '../../constants/contact';
 import NewsletterSignupForm from '../newsletter/NewsletterSignupForm';
 import Logo from '../ui/Logo';
 import {
@@ -136,8 +137,8 @@ const Footer = () => {
                 </div>
                 <div className="footer-contact-item">
                   <FaEnvelope className="footer-contact-icon" size={12} />
-                  <a href="mailto:contact@marhas.com" className="hover:text-brand-accent transition-colors">
-                    contact@marhas.com
+                  <a href={`mailto:${SUPPORT_EMAIL}`} className="hover:text-brand-accent transition-colors">
+                    {SUPPORT_EMAIL}
                   </a>
                 </div>
               </div>

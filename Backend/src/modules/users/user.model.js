@@ -80,6 +80,21 @@ const userSchema = new mongoose.Schema(
       default: null,
       select: false
     },
+    adminLoginChallengeId: {
+      type: String,
+      default: null,
+      select: false
+    },
+    adminLoginOtpHash: {
+      type: String,
+      default: null,
+      select: false
+    },
+    adminLoginOtpExpires: {
+      type: Date,
+      default: null,
+      select: false
+    },
     wishlist: [
       {
         type: mongoose.Schema.Types.ObjectId,
@@ -116,6 +131,9 @@ const userSchema = new mongoose.Schema(
         delete ret.emailVerificationExpires;
         delete ret.passwordResetToken;
         delete ret.passwordResetExpires;
+        delete ret.adminLoginChallengeId;
+        delete ret.adminLoginOtpHash;
+        delete ret.adminLoginOtpExpires;
         delete ret.refreshTokens;
         delete ret.__v;
         return ret;

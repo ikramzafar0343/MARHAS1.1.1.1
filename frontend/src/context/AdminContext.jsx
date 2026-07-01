@@ -49,9 +49,25 @@ export const AdminProvider = ({ children }) => {
 
   const isAdminLoggedIn = Boolean(adminUser);
 
-  const adminLogin = useCallback(async ({ email, password }) => {
+  const adminRequestLogin = useCallback(async ({ email, password }) => {
     try {
-      const data = await authService.adminLogin({ email, password });
+      const data = await authService.adminRequestLogin({ email, password });
+      return {
+        success: true,
+        challengeId: data.challengeId,
+        devOtp: data.devOtp || ''
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: getApiErrorMessage(error)
+      };
+    }
+  }, []);
+
+  const adminVerifyOtp = useCallback(async ({ challengeId, otp }) => {
+    try {
+      const data = await authService.adminVerifyOtp({ challengeId, otp });
       setAdminUser({
         id: data.user.id,
         email: data.user.email,
@@ -67,6 +83,18 @@ export const AdminProvider = ({ children }) => {
     }
   }, []);
 
+  const adminLogin = useCallback(async ({ email, password }) => {
+    const request = await adminRequestLogin({ email, password });
+    if (!request.success) {
+      return request;
+    }
+
+    return {
+      success: false,
+      message: 'Enter the verification code sent to support@marhas.pk'
+    };
+  }, [adminRequestLogin]);
+
   const adminLogout = useCallback(async () => {
     try {
       await authService.adminLogout();
@@ -81,9 +109,11 @@ export const AdminProvider = ({ children }) => {
       adminUser,
       isAdminLoggedIn,
       adminLogin,
+      adminRequestLogin,
+      adminVerifyOtp,
       adminLogout
     }),
-    [adminUser, isAdminLoggedIn, adminLogin, adminLogout]
+    [adminUser, isAdminLoggedIn, adminLogin, adminRequestLogin, adminVerifyOtp, adminLogout]
   );
 
   return <AdminContext.Provider value={value}>{children}</AdminContext.Provider>;

@@ -25,6 +25,7 @@ const envSchema = z.object({
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
   EMAIL_FROM: z.string().default('MARHAS <noreply@marhas.com>'),
+  SUPPORT_EMAIL: z.string().email().default('support@marhas.pk'),
   APP_URL: z.string().default('http://localhost:5173'),
   UPLOAD_MAX_FILE_SIZE: z.coerce.number().default(10485760),
   UPLOAD_DIR: z.string().default('src/uploads'),

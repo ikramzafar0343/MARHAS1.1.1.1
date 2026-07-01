@@ -28,6 +28,14 @@ export const loginSchema = z.object({
 
 export const adminLoginSchema = loginSchema;
 
+export const adminVerifyOtpSchema = z.object({
+  challengeId: z.string().min(1, 'Verification session is required'),
+  otp: z
+    .string()
+    .trim()
+    .regex(/^\d{6}$/, 'Enter the 6-digit verification code')
+});
+
 export const forgotPasswordSchema = z.object({
   email: z.string().trim().email('Invalid email address')
 });

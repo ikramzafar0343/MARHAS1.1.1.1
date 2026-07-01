@@ -1,4 +1,3 @@
-import React from 'react';
 import { motion } from 'framer-motion';
 import NewsletterSignupForm from '../newsletter/NewsletterSignupForm';
 import { Section, Container } from '../ui/Layout';

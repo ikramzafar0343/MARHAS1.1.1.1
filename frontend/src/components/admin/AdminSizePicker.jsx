@@ -1,4 +1,3 @@
-import React from 'react';
 import { ADMIN_PRODUCT_SIZES } from '../../constants/adminProductForm';
 
 const AdminSizePicker = ({ selectedSizes = [], onChange }) => {

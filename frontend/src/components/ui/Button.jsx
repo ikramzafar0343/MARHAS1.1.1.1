@@ -1,4 +1,3 @@
-import React from 'react';
 
 /**
  * Button component following the MARHAS design system.

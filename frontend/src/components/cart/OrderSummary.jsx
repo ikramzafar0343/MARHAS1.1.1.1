@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useCustomerContent } from '../../context/CustomerContentContext';
 import { formatPrice, getOrderTotal, getShippingFee, getTaxAmount } from '../../utils/cart';

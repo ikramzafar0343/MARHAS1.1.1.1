@@ -84,7 +84,7 @@ export class StorefrontRepository {
 
     return this.model
       .findOneAndUpdate({ key: normalizedKey }, payload, {
-        new: true,
+        returnDocument: 'after',
         upsert: true,
         runValidators: true,
         setDefaultsOnInsert: true,
@@ -106,7 +106,7 @@ export class StorefrontRepository {
 
     return this.model
       .findOneAndUpdate({ key: key.toLowerCase().trim() }, payload, {
-        new: true,
+        returnDocument: 'after',
         runValidators: true
       })
       .exec();
@@ -120,7 +120,7 @@ export class StorefrontRepository {
 
     return this.model
       .findOneAndUpdate({ key: key.toLowerCase().trim() }, update, {
-        new: true,
+        returnDocument: 'after',
         runValidators: true
       })
       .exec();
@@ -134,7 +134,7 @@ export class StorefrontRepository {
 
     return this.model
       .findOneAndUpdate({ key: key.toLowerCase().trim() }, update, {
-        new: true,
+        returnDocument: 'after',
         runValidators: true
       })
       .exec();
@@ -151,7 +151,7 @@ export class StorefrontRepository {
 
     return this.model
       .findOneAndUpdate({ key }, payload, {
-        new: true,
+        returnDocument: 'after',
         upsert: true,
         runValidators: true,
         setDefaultsOnInsert: true,

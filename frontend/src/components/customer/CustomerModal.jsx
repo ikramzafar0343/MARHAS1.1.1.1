@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import { useEffect } from 'react';
 import { HiX } from 'react-icons/hi';
 
 const CustomerModal = ({ open, onClose, title, children, footer }) => {

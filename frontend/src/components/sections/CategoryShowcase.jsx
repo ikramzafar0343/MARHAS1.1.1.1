@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import { useRef } from 'react';
 import { useCustomerContent } from '../../context/CustomerContentContext';
 import CategoryCard from './category/CategoryCard';
 import useCategoryStackAnimation from '../../hooks/useCategoryStackAnimation';

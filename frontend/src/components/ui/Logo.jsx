@@ -1,11 +1,10 @@
-import React, { useCallback } from 'react';
+import { useCallback } from 'react';
 import PropTypes from 'prop-types';
 import {
   LOGO_ASPECT_RATIO,
   LOGO_INTRINSIC_HEIGHT,
   LOGO_INTRINSIC_WIDTH,
   LOGO_SRC,
-  LOGO_SRC_2X,
   LOGO_SRC_SET
 } from '../../constants/logo';
 

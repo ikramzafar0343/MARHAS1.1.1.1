@@ -1,4 +1,3 @@
-import React from 'react';
 import { Link } from 'react-router-dom';
 import { HiHeart, HiOutlineMinus, HiOutlinePlus } from 'react-icons/hi';
 import { CATEGORY_LABELS } from '../../constants/products';

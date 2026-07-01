@@ -1,4 +1,3 @@
-import React from 'react';
 import OrderItemsList from '../orders/OrderItemsList';
 import CustomerModal from './CustomerModal';
 import {

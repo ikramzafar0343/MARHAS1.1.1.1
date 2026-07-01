@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 
 const CheckoutForm = ({ formId = 'checkout-form', defaultEmail = '', defaultName = '', onSubmit, submitting = false }) => {
   const [form, setForm] = useState({

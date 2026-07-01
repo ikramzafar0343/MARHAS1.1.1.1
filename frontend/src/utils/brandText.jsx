@@ -1,4 +1,3 @@
-import React from 'react';
 import BrandWordmark from '../components/ui/BrandWordmark';
 
 const BRAND_PATTERN = /(MARHAS)/g;

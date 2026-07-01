@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { mapApiProduct, mapApiProducts } from '../utils/apiMappers';
 import { registerProductLookup } from '../utils/productLookup';
 import { productsService } from '../services/marhasApi';
@@ -35,7 +35,7 @@ export const ProductsProvider = ({ children }) => {
   }, []);
 
   useEffect(() => {
-    loadProducts();
+    void Promise.resolve().then(() => loadProducts());
   }, [loadProducts]);
 
   const productMap = useMemo(() => {

@@ -1,16 +1,7 @@
-import React, { useMemo } from 'react';
-import {
-  formatOrderDate,
-  formatPaymentMethod,
-  formatPrice,
-  resolveCartItems
-} from '../../utils/cart';
+import { formatOrderDate, formatPaymentMethod, formatPrice, resolveCartItems } from '../../utils/cart';
 
 const OrderConfirmationDetails = ({ order }) => {
-  const resolvedItems = useMemo(
-    () => (order?.items ? resolveCartItems(order.items) : []),
-    [order?.items]
-  );
+  const resolvedItems = order?.items ? resolveCartItems(order.items) : [];
 
   if (!order) {
     return null;

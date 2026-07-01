@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { HiOutlinePhotograph, HiOutlineUpload } from 'react-icons/hi';
 import AdminProductVariants from './AdminProductVariants';
 import AdminSizePicker from './AdminSizePicker';
@@ -19,7 +19,9 @@ const AddProductForm = ({ onCancel, onListProduct }) => {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
-  imagesRef.current = images;
+  useEffect(() => {
+    imagesRef.current = images;
+  }, [images]);
 
   useEffect(() => {
     return () => {

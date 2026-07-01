@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
@@ -41,9 +41,11 @@ const ProductDetail = () => {
   const [activeTab, setActiveTab] = useState('Description');
 
   useEffect(() => {
-    setQuantity(1);
-    setSelectedColor(0);
-    setSelectedSize('M');
+    void Promise.resolve().then(() => {
+      setQuantity(1);
+      setSelectedColor(0);
+      setSelectedSize('M');
+    });
   }, [id]);
 
   useEffect(() => {

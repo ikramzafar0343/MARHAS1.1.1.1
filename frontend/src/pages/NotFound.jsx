@@ -1,4 +1,3 @@
-import React from 'react';
 import { Link } from 'react-router-dom';
 import { Section, Container, Stack } from '../components/ui/Layout';
 import { DisplayHero, HeadingM } from '../components/ui/Typography';

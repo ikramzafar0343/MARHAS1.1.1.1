@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AdminRoute from '../../components/admin/AdminRoute';
 import AdminHeader from '../../components/admin/AdminHeader';
@@ -79,8 +79,10 @@ const AdminDashboardContent = () => {
   }, []);
 
   useEffect(() => {
-    loadRecentOrders();
-    loadMetrics();
+    void Promise.resolve().then(() => {
+      loadRecentOrders();
+      loadMetrics();
+    });
   }, [loadRecentOrders, loadMetrics]);
 
   const handleLogout = () => {

@@ -1,4 +1,3 @@
-import React from 'react';
 
 const AuthBrandPanel = ({ image, imageAlt = 'MARHAS collection' }) => (
   <aside className="auth-brand-panel" aria-label="MARHAS brand">

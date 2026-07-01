@@ -1,6 +1,5 @@
 import product11 from '../assets/images/product1.1.jpg';
 import product12 from '../assets/images/product1.2.jpg';
-import product21 from '../assets/images/product2.1.jpg';
 import product22 from '../assets/images/product2.2.jpg';
 import product3 from '../assets/images/product3.jpg';
 import product41 from '../assets/images/product4.1.jpg';

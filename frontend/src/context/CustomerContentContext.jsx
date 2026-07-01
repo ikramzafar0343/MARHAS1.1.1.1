@@ -1,4 +1,4 @@
-import React, {
+import {
   createContext,
   useCallback,
   useContext,
@@ -27,7 +27,6 @@ import {
   getVisibleFooterSocialLinks,
   getVisibleShopLookItems,
   getVisibleShowcaseCategories,
-  mergeCustomerContent,
   normalizeStorefrontContent,
   prepareStorefrontContent,
   removeCategoryFromContent,
@@ -126,10 +125,10 @@ export const CustomerContentProvider = ({ children }) => {
   }, [applyContent]);
 
   useEffect(() => {
-    loadContent();
+    void Promise.resolve().then(() => loadContent());
   }, [loadContent]);
 
-  const persistLatestContent = useCallback(async () => {
+  const persistLatestContent = useCallback(async function persistLatestContent() {
     if (!getAdminToken()) {
       setError('Your admin session expired. Sign in again to save changes.');
       window.dispatchEvent(new CustomEvent('marhas:admin-session-expired'));

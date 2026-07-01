@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ordersService } from '../../services/marhasApi';
 import { getApiErrorMessage } from '../../services/authService';
 import { mapApiOrder } from '../../utils/apiMappers';

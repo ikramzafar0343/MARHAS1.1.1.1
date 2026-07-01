@@ -1,4 +1,3 @@
-import React from 'react';
 import { ProductCard } from '../ui/Cards';
 import { Section, Container, Grid } from '../ui/Layout';
 import { useProducts } from '../../context/ProductsContext';

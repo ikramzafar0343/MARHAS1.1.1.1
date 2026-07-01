@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   HiOutlineEye,
   HiOutlinePencil,
@@ -256,26 +256,13 @@ export const AdminOrderDetailsModal = ({ order, open, onClose }) => {
 
 const AdminOrderEditModal = ({ order, open, onClose, onSave }) => {
   const [form, setForm] = useState({
-    customer: '',
-    email: '',
-    phone: '',
-    address: '',
-    city: '',
-    postalCode: ''
+    customer: order?.customer ?? '',
+    email: order?.email ?? '',
+    phone: order?.phone ?? '',
+    address: order?.shipping?.address ?? '',
+    city: order?.shipping?.city ?? '',
+    postalCode: order?.shipping?.postalCode ?? ''
   });
-
-  useEffect(() => {
-    if (order) {
-      setForm({
-        customer: order.customer,
-        email: order.email,
-        phone: order.phone,
-        address: order.shipping.address,
-        city: order.shipping.city,
-        postalCode: order.shipping.postalCode
-      });
-    }
-  }, [order]);
 
   if (!order) {
     return null;
@@ -388,13 +375,7 @@ const AdminOrderEditModal = ({ order, open, onClose, onSave }) => {
 };
 
 const AdminOrderStatusModal = ({ order, open, onClose, onSave }) => {
-  const [status, setStatus] = useState('pending');
-
-  useEffect(() => {
-    if (order) {
-      setStatus(order.status);
-    }
-  }, [order]);
+  const [status, setStatus] = useState(() => order?.status ?? 'pending');
 
   if (!order) {
     return null;
@@ -490,8 +471,15 @@ export const AdminOrdersModals = ({
 }) => (
   <>
     <AdminOrderDetailsModal order={selectedOrder} open={activeModal === 'details'} onClose={onClose} />
-    <AdminOrderEditModal order={selectedOrder} open={activeModal === 'edit'} onClose={onClose} onSave={onEdit} />
+    <AdminOrderEditModal
+      key={`edit-${selectedOrder?.id ?? 'none'}`}
+      order={selectedOrder}
+      open={activeModal === 'edit'}
+      onClose={onClose}
+      onSave={onEdit}
+    />
     <AdminOrderStatusModal
+      key={`status-${selectedOrder?.id ?? 'none'}`}
       order={selectedOrder}
       open={activeModal === 'status'}
       onClose={onClose}

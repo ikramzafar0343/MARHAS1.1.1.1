@@ -1,4 +1,3 @@
-import React from 'react';
 
 /**
  * Layout components for consistent page structure and spacing.

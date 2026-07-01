@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useGlobalContext } from '../../context/GlobalContext';
 import CustomerAvatar from './CustomerAvatar';

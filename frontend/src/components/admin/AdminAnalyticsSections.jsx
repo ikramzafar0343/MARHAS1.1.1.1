@@ -1,4 +1,3 @@
-import React from 'react';
 import { replaceBrandInText } from '../../utils/brandText';
 import AdminAreaChart from './AdminAreaChart';
 import AdminMetricSparkline from './AdminMetricSparkline';
@@ -10,7 +9,7 @@ const KPI_PLACEHOLDERS = [
   { id: 'avg-order', label: 'Avg. Order Value' }
 ];
 
-export const AdminAnalyticsIntro = ({ activePeriod, onPeriodChange, periods, loading = false }) => (
+export const AdminAnalyticsIntro = ({ activePeriod, onPeriodChange, periods }) => (
   <header className="admin-analytics-intro">
     <div>
       <h1 className="admin-analytics-title">Analytics Overview</h1>

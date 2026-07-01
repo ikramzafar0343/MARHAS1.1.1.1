@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 import { Grid } from '../ui/Layout';
 import { ProductCard } from '../ui/Cards';
 import { useProducts } from '../../context/ProductsContext';

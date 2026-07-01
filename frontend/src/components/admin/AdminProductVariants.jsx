@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { HiOutlinePhotograph, HiOutlinePlus, HiOutlineTrash, HiOutlineUpload } from 'react-icons/hi';
 import AdminColorPicker from './AdminColorPicker';
 import {
@@ -9,7 +9,9 @@ import {
 
 const AdminProductVariants = ({ variants, onChange }) => {
   const variantsRef = useRef(variants);
-  variantsRef.current = variants;
+  useEffect(() => {
+    variantsRef.current = variants;
+  }, [variants]);
 
   useEffect(() => {
     return () => {

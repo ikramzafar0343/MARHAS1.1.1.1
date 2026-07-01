@@ -1,4 +1,3 @@
-import React from 'react';
 import { useLocation, Link, useNavigate, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { HiOutlineShoppingBag, HiOutlineSearch, HiOutlineUser, HiOutlineHeart } from 'react-icons/hi';

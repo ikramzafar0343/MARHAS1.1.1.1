@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   AdminInventoryIntro,
@@ -43,7 +43,7 @@ const AdminInventoryContent = () => {
   };
 
   useEffect(() => {
-    loadInventory();
+    void Promise.resolve().then(() => loadInventory());
   }, []);
 
   const filteredItems = useMemo(

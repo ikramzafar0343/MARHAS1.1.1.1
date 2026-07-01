@@ -1,4 +1,3 @@
-import React from 'react';
 
 const buildPoints = (data, width, height, padding) => {
   const min = Math.min(...data);

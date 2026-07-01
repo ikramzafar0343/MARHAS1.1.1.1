@@ -1,10 +1,9 @@
-import React, { createContext, useContext, useState, useMemo, useCallback, useEffect } from 'react';
+import { createContext, useContext, useState, useMemo, useCallback, useEffect } from 'react';
 import {
   buildCartLineId,
   DEFAULT_CART_OPTIONS,
   getCartItemCount,
   getCartSubtotal,
-  getOrderTotal
 } from '../utils/cart';
 import { mapCheckoutOrder } from '../utils/apiMappers';
 import { authService, getApiErrorMessage } from '../services/authService';

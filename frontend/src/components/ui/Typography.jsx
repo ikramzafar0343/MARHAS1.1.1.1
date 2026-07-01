@@ -1,4 +1,3 @@
-import React from 'react';
 
 /**
  * Typography components for consistent text hierarchy.

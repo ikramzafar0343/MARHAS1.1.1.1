@@ -119,7 +119,7 @@ export class UserRepository {
     }
 
     return this.model
-      .findByIdAndUpdate(id, update, { new: true, runValidators: true })
+      .findByIdAndUpdate(id, update, { returnDocument: 'after', runValidators: true })
       .exec();
   }
 
@@ -134,7 +134,7 @@ export class UserRepository {
     }
 
     return this.model
-      .findByIdAndUpdate(id, update, { new: true, runValidators: true })
+      .findByIdAndUpdate(id, update, { returnDocument: 'after', runValidators: true })
       .exec();
   }
 
@@ -149,7 +149,7 @@ export class UserRepository {
     }
 
     return this.model
-      .findByIdAndUpdate(id, update, { new: true, runValidators: true })
+      .findByIdAndUpdate(id, update, { returnDocument: 'after', runValidators: true })
       .exec();
   }
 
@@ -158,7 +158,7 @@ export class UserRepository {
       .findByIdAndUpdate(
         id,
         { emailVerificationToken: token, emailVerificationExpires: expiresAt },
-        { new: true, runValidators: true }
+        { returnDocument: 'after', runValidators: true }
       )
       .exec();
   }
@@ -168,7 +168,7 @@ export class UserRepository {
       .findByIdAndUpdate(
         id,
         { passwordResetToken: token, passwordResetExpires: expiresAt },
-        { new: true, runValidators: true }
+        { returnDocument: 'after', runValidators: true }
       )
       .exec();
   }
@@ -178,7 +178,7 @@ export class UserRepository {
       .findByIdAndUpdate(
         id,
         { $push: { refreshTokens: tokenEntry } },
-        { new: true, runValidators: true }
+        { returnDocument: 'after', runValidators: true }
       )
       .select('+refreshTokens')
       .exec();
@@ -189,7 +189,7 @@ export class UserRepository {
       .findOneAndUpdate(
         { _id: id, 'refreshTokens.tokenHash': tokenHash },
         { $set: { 'refreshTokens.$.revokedAt': new Date() } },
-        { new: true }
+        { returnDocument: 'after' }
       )
       .select('+refreshTokens')
       .exec();
@@ -216,7 +216,7 @@ export class UserRepository {
       .findByIdAndUpdate(
         id,
         { $pull: { refreshTokens: { expiresAt: { $lt: new Date() } } } },
-        { new: true }
+        { returnDocument: 'after' }
       )
       .select('+refreshTokens')
       .exec();
@@ -227,7 +227,7 @@ export class UserRepository {
       .findByIdAndUpdate(
         userId,
         { $addToSet: { wishlist: productId } },
-        { new: true, runValidators: true }
+        { returnDocument: 'after', runValidators: true }
       )
       .exec();
   }
@@ -237,7 +237,7 @@ export class UserRepository {
       .findByIdAndUpdate(
         userId,
         { $pull: { wishlist: productId } },
-        { new: true, runValidators: true }
+        { returnDocument: 'after', runValidators: true }
       )
       .exec();
   }
@@ -284,7 +284,7 @@ export class UserRepository {
       .findByIdAndUpdate(
         userId,
         { $pull: { addresses: { _id: addressId } } },
-        { new: true, runValidators: true }
+        { returnDocument: 'after', runValidators: true }
       )
       .exec();
   }

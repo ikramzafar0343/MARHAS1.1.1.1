@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DEFAULT_ADMIN_EMAIL } from '../../constants/adminSeed';
 import { useAdminContext } from '../../context/AdminContext';

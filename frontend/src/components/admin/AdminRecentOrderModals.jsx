@@ -1,4 +1,3 @@
-import React from 'react';
 import OrderItemsList from '../orders/OrderItemsList';
 import BrandWordmark from '../ui/BrandWordmark';
 import AdminModal from './AdminModal';

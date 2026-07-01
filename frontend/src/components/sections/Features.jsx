@@ -1,4 +1,3 @@
-import React from 'react';
 import { HiOutlineSparkles, HiOutlineCube, HiOutlineShieldCheck, HiOutlineTruck } from 'react-icons/hi';
 import { Container } from '../ui/Layout';
 

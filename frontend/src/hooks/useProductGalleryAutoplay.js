@@ -50,8 +50,10 @@ const useProductGalleryAutoplay = (
   );
 
   useEffect(() => {
-    setActiveIndex(0);
-    pauseUntilRef.current = 0;
+    void Promise.resolve().then(() => {
+      setActiveIndex(0);
+      pauseUntilRef.current = 0;
+    });
   }, [galleryKey]);
 
   useEffect(() => {

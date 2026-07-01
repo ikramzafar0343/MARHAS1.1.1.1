@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AiFillStar } from 'react-icons/ai';
 import { MARHAS_IMAGE } from '../../constants/images';

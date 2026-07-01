@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import { useEffect } from 'react';
 import { Link, Navigate, useParams } from 'react-router-dom';
 import { HiOutlineShieldCheck, HiOutlineTruck } from 'react-icons/hi';
 import BrandWordmark from '../components/ui/BrandWordmark';

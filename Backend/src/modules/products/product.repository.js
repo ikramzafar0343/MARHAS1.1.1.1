@@ -234,7 +234,7 @@ export class ProductRepository {
     }
 
     return this.model
-      .findByIdAndUpdate(id, update, { new: true, runValidators: true })
+      .findByIdAndUpdate(id, update, { returnDocument: 'after', runValidators: true })
       .exec();
   }
 
@@ -245,7 +245,7 @@ export class ProductRepository {
     }
 
     return this.model
-      .findByIdAndUpdate(id, update, { new: true, runValidators: true })
+      .findByIdAndUpdate(id, update, { returnDocument: 'after', runValidators: true })
       .exec();
   }
 
@@ -264,7 +264,7 @@ export class ProductRepository {
     }
 
     const saved = await this.model
-      .findByIdAndUpdate(normalizedId, update, { new: true, runValidators: false })
+      .findByIdAndUpdate(normalizedId, update, { returnDocument: 'after', runValidators: false })
       .exec();
 
     if (!saved) {

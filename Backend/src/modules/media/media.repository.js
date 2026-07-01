@@ -93,7 +93,7 @@ export class MediaRepository {
 
   async updateById(id, data) {
     return this.model
-      .findByIdAndUpdate(id, data, { new: true, runValidators: true })
+      .findByIdAndUpdate(id, data, { returnDocument: 'after', runValidators: true })
       .exec();
   }
 

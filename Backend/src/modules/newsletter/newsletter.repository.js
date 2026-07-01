@@ -78,7 +78,7 @@ export class NewsletterRepository {
       .findOneAndUpdate(
         { email: email.toLowerCase().trim() },
         { isActive: false, unsubscribedAt: new Date() },
-        { new: true, runValidators: true }
+        { returnDocument: 'after', runValidators: true }
       )
       .exec();
   }

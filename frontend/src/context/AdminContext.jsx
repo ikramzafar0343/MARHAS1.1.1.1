@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { authService, getApiErrorMessage } from '../services/authService';
 import { getAdminToken, setAdminToken } from '../services/tokenStorage';
 
@@ -34,7 +34,7 @@ export const AdminProvider = ({ children }) => {
 
   useEffect(() => {
     if (adminUser && !getAdminToken()) {
-      setAdminUser(null);
+      void Promise.resolve().then(() => setAdminUser(null));
     }
   }, [adminUser]);
 

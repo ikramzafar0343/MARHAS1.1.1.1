@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useCustomerContent } from '../context/CustomerContentContext';
 import { resolveMediaUrl } from '../utils/customerContentHelpers';
 

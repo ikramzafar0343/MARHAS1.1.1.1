@@ -1,4 +1,3 @@
-import React from 'react';
 import { resolveAssetUrl } from '../../utils/assetUrl';
 
 const CustomerAvatar = ({ user, className = '', imageClassName = '' }) => {

@@ -1,4 +1,3 @@
-import React from 'react';
 import { Navigate } from 'react-router-dom';
 import AuthBrandPanel from '../../components/auth/AuthBrandPanel';
 import AuthPageLogo from '../../components/auth/AuthPageLogo';

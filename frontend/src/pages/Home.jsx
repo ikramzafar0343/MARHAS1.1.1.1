@@ -1,4 +1,3 @@
-import React from 'react';
 import HeroSlider from '../components/HeroSlider';
 import CategoryShowcase from '../components/sections/CategoryShowcase';
 import BestSellers from '../components/sections/BestSellers';

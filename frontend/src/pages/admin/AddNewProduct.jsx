@@ -1,4 +1,3 @@
-import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import AddProductForm from '../../components/admin/AddProductForm';
 import AdminHeader from '../../components/admin/AdminHeader';
@@ -29,7 +28,7 @@ const AddNewProductContent = () => {
       await refreshProducts();
       navigate('/admin/inventory');
     } catch (error) {
-      throw new Error(getApiErrorMessage(error));
+      throw new Error(getApiErrorMessage(error), { cause: error });
     }
   };
 

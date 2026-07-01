@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Link, useLocation } from 'react-router-dom';
 import {
@@ -74,8 +74,10 @@ const Header = () => {
   const headerIndicatorClass = isDarkHeaderPage ? 'bg-brand-primary' : 'bg-white';
 
   useEffect(() => {
-    setMobileMenuOpen(false);
-    setSearchOpen(false);
+    void Promise.resolve().then(() => {
+      setMobileMenuOpen(false);
+      setSearchOpen(false);
+    });
   }, [location.pathname]);
 
   return (

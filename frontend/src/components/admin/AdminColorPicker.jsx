@@ -1,4 +1,3 @@
-import React from 'react';
 import { ADMIN_PRODUCT_PRESET_COLORS } from '../../constants/adminProductForm';
 
 const normalizeHex = (hex) => hex.toLowerCase();

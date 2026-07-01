@@ -168,7 +168,7 @@ export class OrderRepository {
     }
 
     return this.model
-      .findByIdAndUpdate(id, update, { new: true, runValidators: true })
+      .findByIdAndUpdate(id, update, { returnDocument: 'after', runValidators: true })
       .exec();
   }
 
@@ -187,7 +187,7 @@ export class OrderRepository {
     }
 
     return this.model
-      .findByIdAndUpdate(id, update, { new: true, runValidators: true })
+      .findByIdAndUpdate(id, update, { returnDocument: 'after', runValidators: true })
       .exec();
   }
 
@@ -198,7 +198,7 @@ export class OrderRepository {
     }
 
     return this.model
-      .findByIdAndUpdate(id, update, { new: true, runValidators: true })
+      .findByIdAndUpdate(id, update, { returnDocument: 'after', runValidators: true })
       .exec();
   }
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   HiOutlineEye,
   HiOutlinePencil,
@@ -239,24 +239,12 @@ const AdminInventoryDetailsModal = ({ item, open, onClose }) => {
 
 const AdminInventoryEditModal = ({ item, open, onClose, onSave }) => {
   const [form, setForm] = useState({
-    name: '',
-    sku: '',
-    category: '',
-    price: '',
-    stock: '0'
+    name: item?.name ?? '',
+    sku: item?.sku ?? '',
+    category: item?.category ?? '',
+    price: item ? String(item.price) : '',
+    stock: item ? String(item.stock) : '0'
   });
-
-  useEffect(() => {
-    if (item) {
-      setForm({
-        name: item.name,
-        sku: item.sku,
-        category: item.category,
-        price: String(item.price),
-        stock: String(item.stock)
-      });
-    }
-  }, [item]);
 
   if (!item) {
     return null;
@@ -397,13 +385,7 @@ const AdminInventoryDeleteModal = ({ item, open, onClose, onConfirm }) => {
 };
 
 const AdminInventoryUpdateModal = ({ item, open, onClose, onSave }) => {
-  const [stock, setStock] = useState('0');
-
-  useEffect(() => {
-    if (item) {
-      setStock(String(item.stock));
-    }
-  }, [item]);
+  const [stock, setStock] = useState(() => (item ? String(item.stock) : '0'));
 
   if (!item) {
     return null;
@@ -455,13 +437,6 @@ const AdminInventoryUpdateModal = ({ item, open, onClose, onSave }) => {
 const AdminInventoryRestockModal = ({ item, open, onClose, onSave }) => {
   const [quantity, setQuantity] = useState('1');
   const [note, setNote] = useState('');
-
-  useEffect(() => {
-    if (item) {
-      setQuantity('1');
-      setNote('');
-    }
-  }, [item]);
 
   if (!item) {
     return null;
@@ -534,18 +509,21 @@ export const AdminInventoryModals = ({
   <>
     <AdminInventoryDetailsModal item={selectedItem} open={activeModal === 'details'} onClose={onClose} />
     <AdminInventoryEditModal
+      key={`edit-${selectedItem?.id ?? 'none'}`}
       item={selectedItem}
       open={activeModal === 'edit'}
       onClose={onClose}
       onSave={onEdit}
     />
     <AdminInventoryUpdateModal
+      key={`update-${selectedItem?.id ?? 'none'}`}
       item={selectedItem}
       open={activeModal === 'update'}
       onClose={onClose}
       onSave={onUpdateStock}
     />
     <AdminInventoryRestockModal
+      key={`restock-${selectedItem?.id ?? 'none'}`}
       item={selectedItem}
       open={activeModal === 'restock'}
       onClose={onClose}

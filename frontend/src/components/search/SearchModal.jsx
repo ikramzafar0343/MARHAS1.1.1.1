@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
@@ -90,13 +90,15 @@ const SearchModal = ({ open, onClose }) => {
     const trimmed = query.trim();
 
     if (trimmed.length < MIN_QUERY_LENGTH) {
-      setResults([]);
-      setLoading(false);
-      setHasSearched(false);
+      void Promise.resolve().then(() => {
+        setResults([]);
+        setLoading(false);
+        setHasSearched(false);
+      });
       return undefined;
     }
 
-    setLoading(true);
+    void Promise.resolve().then(() => setLoading(true));
     const timer = window.setTimeout(async () => {
       try {
         const response = await productsService.search(trimmed, { limit: RESULT_LIMIT });

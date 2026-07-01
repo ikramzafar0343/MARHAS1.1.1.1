@@ -17,5 +17,22 @@ export default defineConfig([
       globals: globals.browser,
       parserOptions: { ecmaFeatures: { jsx: true } },
     },
+    rules: {
+      'react-refresh/only-export-components': [
+        'error',
+        {
+          allowConstantExport: true,
+          allowExportNames: [
+            'useAdminContext',
+            'useCustomerContent',
+            'useGlobalContext',
+            'useProducts',
+            'filterInventoryItems',
+            'filterAdminOrders',
+            'TRUST_BADGE_ITEMS',
+          ],
+        },
+      ],
+    },
   },
 ])

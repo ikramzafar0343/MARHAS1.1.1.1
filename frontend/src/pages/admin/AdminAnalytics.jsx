@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   AdminAnalyticsCategoryBars,
@@ -70,7 +70,7 @@ const AdminAnalyticsContent = () => {
 
   useEffect(() => {
     const controller = new AbortController();
-    loadAnalytics(activePeriod, controller.signal);
+    void Promise.resolve().then(() => loadAnalytics(activePeriod, controller.signal));
 
     return () => {
       controller.abort();
@@ -97,7 +97,6 @@ const AdminAnalyticsContent = () => {
           activePeriod={activePeriod}
           onPeriodChange={setActivePeriod}
           periods={ADMIN_ANALYTICS_PERIODS}
-          loading={loading}
         />
 
         {error && <p className="admin-login-error">{error}</p>}

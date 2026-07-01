@@ -1,4 +1,3 @@
-import React from 'react';
 import { Link } from 'react-router-dom';
 import NewsletterSignupForm from '../newsletter/NewsletterSignupForm';
 import Logo from '../ui/Logo';

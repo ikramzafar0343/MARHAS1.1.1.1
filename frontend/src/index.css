@@ -5559,6 +5559,50 @@
     background-color: color-mix(in srgb, var(--color-brand-accent) 10%, white);
   }
 
+  .admin-product-specs {
+    @apply flex flex-col gap-4;
+  }
+
+  .admin-product-spec-chips {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.75rem;
+  }
+
+  @media (min-width: 640px) {
+    .admin-product-spec-chips {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+
+  .admin-product-spec-chip {
+    @apply flex cursor-pointer flex-col gap-1 border border-brand-border bg-brand-white px-4 py-4 text-left transition-colors;
+  }
+
+  .admin-product-spec-chip--active {
+    @apply border-brand-primary;
+    background-color: color-mix(in srgb, var(--color-brand-accent) 8%, white);
+  }
+
+  .admin-product-spec-chip-label {
+    @apply text-sm font-semibold text-brand-primary;
+    font-family: var(--font-brand);
+  }
+
+  .admin-product-spec-chip-desc {
+    @apply text-xs text-text-sub;
+    font-family: var(--font-body);
+  }
+
+  .admin-product-spec-fields {
+    @apply flex flex-col gap-4;
+  }
+
+  .admin-product-spec-hint {
+    @apply text-sm text-text-sub;
+    font-family: var(--font-body);
+  }
+
   .admin-product-variant-upload {
     @apply mb-3 flex cursor-pointer items-center gap-2 border border-dashed border-brand-border bg-brand-white px-4 py-3 text-sm text-text-sub transition-colors hover:border-brand-accent;
     font-family: var(--font-body);
@@ -5803,4 +5847,27 @@
 .marhas-swal-btn--danger {
   background: #b42318 !important;
   color: var(--color-brand-white) !important;
+}
+
+.marhas-swal-toast {
+  margin-top: 4.5rem !important;
+  padding: 0.85rem 1.1rem !important;
+  border: 1px solid var(--color-brand-border) !important;
+  border-radius: 0 !important;
+  font-family: var(--font-body) !important;
+  box-shadow: 0 8px 28px rgba(31, 31, 31, 0.12) !important;
+  background: var(--color-brand-white) !important;
+}
+
+.marhas-swal-toast-title {
+  margin: 0 !important;
+  padding: 0 !important;
+  font-family: var(--font-brand) !important;
+  font-size: 0.875rem !important;
+  font-weight: 600 !important;
+  color: var(--color-brand-primary) !important;
+}
+
+.marhas-swal-toast-progress {
+  background: var(--color-brand-primary) !important;
 }

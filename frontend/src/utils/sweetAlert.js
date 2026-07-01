@@ -46,3 +46,24 @@ export const confirmDelete = (title, text) =>
     confirmText: 'Delete',
     danger: true
   });
+
+const commerceToast = Swal.mixin({
+  toast: true,
+  position: 'top-end',
+  showConfirmButton: false,
+  timer: 2400,
+  timerProgressBar: true,
+  customClass: {
+    popup: 'marhas-swal-toast',
+    title: 'marhas-swal-toast-title',
+    timerProgressBar: 'marhas-swal-toast-progress'
+  },
+  didOpen: (toast) => {
+    toast.addEventListener('mouseenter', Swal.stopTimer);
+    toast.addEventListener('mouseleave', Swal.resumeTimer);
+  }
+});
+
+export const showCommerceToast = (title) => {
+  void commerceToast.fire({ icon: 'success', title });
+};

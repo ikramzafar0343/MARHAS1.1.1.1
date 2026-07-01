@@ -9,6 +9,7 @@ import { mapCheckoutOrder } from '../utils/apiMappers';
 import { authService, getApiErrorMessage } from '../services/authService';
 import { ordersService } from '../services/marhasApi';
 import { setCustomerToken, getCustomerToken } from '../services/tokenStorage';
+import { showCommerceToast } from '../utils/sweetAlert';
 
 const GlobalContext = createContext();
 const WISHLIST_STORAGE_KEY = 'marhas-wishlist';
@@ -157,11 +158,14 @@ export const GlobalProvider = ({ children }) => {
 
   const toggleWishlist = useCallback((productId) => {
     const id = normalizeId(productId);
+    const removing = wishlistIds.includes(id);
 
     setWishlistIds((prev) =>
       prev.includes(id) ? prev.filter((itemId) => itemId !== id) : [...prev, id]
     );
-  }, []);
+
+    showCommerceToast(removing ? 'Removed from wishlist' : 'Added to wishlist');
+  }, [wishlistIds]);
 
   const addToCart = useCallback((productId, options = {}) => {
     const id = normalizeId(productId);
@@ -194,33 +198,35 @@ export const GlobalProvider = ({ children }) => {
         }
       ];
     });
+
+    showCommerceToast('Added to cart');
+  }, []);
+
+  const removeFromCart = useCallback((lineId) => {
+    setCartItems((prev) => prev.filter((item) => item.lineId !== lineId));
+    showCommerceToast('Removed from cart');
   }, []);
 
   const updateCartQuantity = useCallback((lineId, quantity) => {
     if (quantity <= 0) {
-      setCartItems((prev) => prev.filter((item) => item.lineId !== lineId));
+      removeFromCart(lineId);
       return;
     }
 
     setCartItems((prev) =>
       prev.map((item) => (item.lineId === lineId ? { ...item, quantity } : item))
     );
-  }, []);
+  }, [removeFromCart]);
 
-  const removeFromCart = useCallback((lineId) => {
+  const moveCartItemToWishlist = useCallback((lineId, productId) => {
+    const id = normalizeId(productId);
+    const wasInWishlist = wishlistIds.includes(id);
+
+    setWishlistIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
     setCartItems((prev) => prev.filter((item) => item.lineId !== lineId));
-  }, []);
 
-  const moveCartItemToWishlist = useCallback(
-    (lineId, productId) => {
-      if (!isInWishlist(productId)) {
-        toggleWishlist(productId);
-      }
-
-      removeFromCart(lineId);
-    },
-    [isInWishlist, toggleWishlist, removeFromCart]
-  );
+    showCommerceToast(wasInWishlist ? 'Removed from cart' : 'Added to wishlist');
+  }, [wishlistIds]);
 
   const addRecentlyViewed = useCallback((productId) => {
     const id = normalizeId(productId);

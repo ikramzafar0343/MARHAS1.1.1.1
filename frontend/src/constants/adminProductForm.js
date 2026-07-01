@@ -26,6 +26,35 @@ export const ADMIN_PRODUCT_MAX_VARIANT_IMAGES = 3;
 
 export const ADMIN_PRODUCT_SIZES = ['XS', 'S', 'M', 'L', 'XL'];
 
+export const ADMIN_PRODUCT_SPECIFICATION_OPTIONS = [
+  {
+    key: 'composition',
+    label: 'Composition',
+    description: 'Fabric blend and material details',
+    defaultText: 'Premium fabric with refined finishing.'
+  },
+  {
+    key: 'care',
+    label: 'Care',
+    description: 'Washing and maintenance instructions',
+    defaultText: 'Dry clean only. Steam iron at medium temperature.'
+  },
+  {
+    key: 'includes',
+    label: 'Includes',
+    description: 'What is included with the product',
+    defaultText: 'Complete ensemble as shown in product imagery.'
+  }
+];
+
+export const PRODUCT_SPECIFICATION_FIELDS = ADMIN_PRODUCT_SPECIFICATION_OPTIONS.map(
+  ({ key, label }) => ({ key, label })
+);
+
+export const DEFAULT_RETURN_POLICY = `14-day exchange policy for unworn items with original tags intact.
+Nationwide delivery within 3–5 working days. Free shipping on orders above PKR 15,000.
+Secure checkout with encrypted payment processing.`;
+
 export const ADMIN_PRODUCT_PRESET_COLORS = [
   { name: 'Ivory Gold', hex: '#EAE0D5' },
   { name: 'Soft Sand', hex: '#C9A86A' },
@@ -49,5 +78,7 @@ export const ADMIN_PRODUCT_INITIAL_STATE = {
   discountType: 'percentage',
   description: '',
   sizes: [],
+  specifications: {},
+  returnPolicy: DEFAULT_RETURN_POLICY,
   bestSeller: 'no'
 };

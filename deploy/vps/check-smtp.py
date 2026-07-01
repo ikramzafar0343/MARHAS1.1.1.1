@@ -7,8 +7,10 @@ USER = os.environ.get("MARHAS_VPS_USER", "greentech")
 PASSWORD = os.environ.get("MARHAS_VPS_PASSWORD", "")
 
 cmds = [
-    r"grep -E '^(SMTP_|EMAIL_FROM|SUPPORT_EMAIL|NODE_ENV)=' /opt/marhas/Backend/.env | sed 's/SMTP_PASS=.*/SMTP_PASS=***hidden***/'",
-    "journalctl -u marhas -n 60 --no-pager 2>/dev/null | grep -iE 'smtp|email|otp|mail|skipped' || echo 'no-mail-logs'",
+    r"echo '$PASSWORD' | sudo -S grep -E '^(SMTP_|EMAIL_FROM|SUPPORT_EMAIL|NODE_ENV)=' /opt/marhas/Backend/.env 2>/dev/null | sed 's/SMTP_PASS=.*/SMTP_PASS=***hidden***/'".replace(
+        "$PASSWORD", PASSWORD
+    ),
+    f"echo '{PASSWORD}' | sudo -S journalctl -u marhas -n 60 --no-pager 2>/dev/null | grep -iE 'smtp|email|otp|mail|skipped' || echo 'no-mail-logs'",
 ]
 
 c = paramiko.SSHClient()

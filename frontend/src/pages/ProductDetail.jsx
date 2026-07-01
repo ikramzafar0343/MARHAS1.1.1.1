@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   HiHeart,
@@ -15,6 +15,7 @@ import { ProductCard } from '../components/ui/Cards';
 import Logo from '../components/ui/Logo';
 import { replaceBrandInText } from '../utils/brandText';
 import { CATEGORY_LABELS, getCategoryPath, buildCraftsmanshipFeature } from '../constants/products';
+import { PRODUCT_SPECIFICATION_FIELDS, DEFAULT_RETURN_POLICY } from '../constants/adminProductForm';
 import { useProducts } from '../context/ProductsContext';
 import usePrefersReducedMotion from '../hooks/usePrefersReducedMotion';
 import useProductGalleryAutoplay, {
@@ -22,31 +23,30 @@ import useProductGalleryAutoplay, {
 } from '../hooks/useProductGalleryAutoplay';
 import { useGlobalContext } from '../context/GlobalContext';
 
-const DEFAULT_COLORS = [
-  { name: 'Ivory Gold', hex: '#EAE0D5' },
-  { name: 'Soft Sand', hex: '#C9A86A' },
-  { name: 'Deep Charcoal', hex: '#4A4238' }
-];
-
 const ProductDetail = () => {
   const { id } = useParams();
+  const navigate = useNavigate();
   const { isInWishlist, toggleWishlist, addToCart, addRecentlyViewed } = useGlobalContext();
   const { getProductById, fetchProductById, products, loading: catalogLoading } = useProducts();
   const [catalogProduct, setCatalogProduct] = useState(null);
   const [loadingProduct, setLoadingProduct] = useState(true);
   const prefersReducedMotion = usePrefersReducedMotion();
-  const [selectedSize, setSelectedSize] = useState('M');
+  const [selectedSize, setSelectedSize] = useState('');
   const [quantity, setQuantity] = useState(1);
   const [selectedColor, setSelectedColor] = useState(0);
   const [activeTab, setActiveTab] = useState('Description');
 
   useEffect(() => {
+    if (!catalogProduct || String(catalogProduct.id) !== String(id)) {
+      return;
+    }
+
     void Promise.resolve().then(() => {
       setQuantity(1);
       setSelectedColor(0);
-      setSelectedSize('M');
+      setSelectedSize(catalogProduct.sizes?.[0] || '');
     });
-  }, [id]);
+  }, [catalogProduct, id]);
 
   useEffect(() => {
     let active = true;
@@ -131,13 +131,42 @@ const ProductDetail = () => {
     brand: 'MARHAS',
     sku: catalogProduct.sku || `M.${String(catalogProduct.id).slice(-4)}`,
     images: productImages,
-    colors: DEFAULT_COLORS,
-    sizes: catalogProduct.sizes?.length ? catalogProduct.sizes : ['XS', 'S', 'M', 'L', 'XL']
+    colors: catalogProduct.colors || [],
+    sizes: catalogProduct.sizes || []
   };
 
   const categoryLabel = CATEGORY_LABELS[product.category] || 'Collections';
   const categoryPath = getCategoryPath(product.category);
   const craftsmanshipFeature = buildCraftsmanshipFeature(product);
+
+  const buildCartOptions = () => ({
+    quantity,
+    ...(product.sizes.length ? { size: selectedSize } : {}),
+    ...(product.colors.length
+      ? {
+          color: product.colors[selectedColor].name,
+          colorHex: product.colors[selectedColor].hex
+        }
+      : {})
+  });
+
+  const handleAddToCart = () => {
+    addToCart(catalogProduct.id, buildCartOptions());
+  };
+
+  const handleBuyItNow = () => {
+    addToCart(catalogProduct.id, buildCartOptions());
+    navigate('/checkout');
+  };
+
+  const visibleSpecifications = PRODUCT_SPECIFICATION_FIELDS.filter(({ key }) =>
+    product.specifications[key]?.trim()
+  );
+
+  const returnPolicyParagraphs = (product.returnPolicy || DEFAULT_RETURN_POLICY)
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean);
 
   const tabContent = {
     Description: (
@@ -153,24 +182,23 @@ const ProductDetail = () => {
     ),
     Specifications: (
       <div className="product-tab-details">
-        <p>
-          <strong className="text-brand-primary">Composition:</strong>{' '}
-          {product.specifications.composition}
-        </p>
-        <p>
-          <strong className="text-brand-primary">Care:</strong> {product.specifications.care}
-        </p>
-        <p>
-          <strong className="text-brand-primary">Includes:</strong>{' '}
-          {product.specifications.includes}
-        </p>
+        {visibleSpecifications.length > 0 ? (
+          visibleSpecifications.map(({ key, label }) => (
+            <p key={key}>
+              <strong className="text-brand-primary">{label}:</strong>{' '}
+              {product.specifications[key]}
+            </p>
+          ))
+        ) : (
+          <p>No specifications listed for this product.</p>
+        )}
       </div>
     ),
     'Return Policy': (
       <div className="product-tab-details">
-        <p>14-day exchange policy for unworn items with original tags intact.</p>
-        <p>Nationwide delivery within 3–5 working days. Free shipping on orders above PKR 15,000.</p>
-        <p>Secure checkout with encrypted payment processing.</p>
+        {returnPolicyParagraphs.map((paragraph) => (
+          <p key={paragraph}>{replaceBrandInText(paragraph)}</p>
+        ))}
       </div>
     )
   };
@@ -232,42 +260,46 @@ const ProductDetail = () => {
               <p className="product-price">PKR {product.price.toLocaleString()}</p>
             </div>
 
-            <div className="product-option">
-              <span className="product-option-label">Color</span>
-              <div className="product-color-swatches">
-                {product.colors.map((color, idx) => (
-                  <button
-                    key={color.name}
-                    type="button"
-                    onClick={() => setSelectedColor(idx)}
-                    className={`product-color-swatch ${
-                      selectedColor === idx ? 'product-color-swatch-active' : ''
-                    }`}
-                    aria-label={color.name}
-                  >
-                    <span style={{ backgroundColor: color.hex }} />
-                  </button>
-                ))}
+            {product.colors.length > 0 ? (
+              <div className="product-option">
+                <span className="product-option-label">Color</span>
+                <div className="product-color-swatches">
+                  {product.colors.map((color, idx) => (
+                    <button
+                      key={color.name}
+                      type="button"
+                      onClick={() => setSelectedColor(idx)}
+                      className={`product-color-swatch ${
+                        selectedColor === idx ? 'product-color-swatch-active' : ''
+                      }`}
+                      aria-label={color.name}
+                    >
+                      <span style={{ backgroundColor: color.hex }} />
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+            ) : null}
 
-            <div className="product-option">
-              <span className="product-option-label">Size</span>
-              <div className="product-size-list">
-                {product.sizes.map((size) => (
-                  <button
-                    key={size}
-                    type="button"
-                    onClick={() => setSelectedSize(size)}
-                    className={`product-size-btn ${
-                      selectedSize === size ? 'product-size-btn-active' : 'product-size-btn-inactive'
-                    }`}
-                  >
-                    {size}
-                  </button>
-                ))}
+            {product.sizes.length > 0 ? (
+              <div className="product-option">
+                <span className="product-option-label">Size</span>
+                <div className="product-size-list">
+                  {product.sizes.map((size) => (
+                    <button
+                      key={size}
+                      type="button"
+                      onClick={() => setSelectedSize(size)}
+                      className={`product-size-btn ${
+                        selectedSize === size ? 'product-size-btn-active' : 'product-size-btn-inactive'
+                      }`}
+                    >
+                      {size}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+            ) : null}
 
             <div className="product-option">
               <span className="product-option-label">Quantity</span>
@@ -296,18 +328,11 @@ const ProductDetail = () => {
               <button
                 type="button"
                 className="product-btn-cart"
-                onClick={() =>
-                  addToCart(catalogProduct.id, {
-                    quantity,
-                    size: selectedSize,
-                    color: product.colors[selectedColor].name,
-                    colorHex: product.colors[selectedColor].hex
-                  })
-                }
+                onClick={handleAddToCart}
               >
                 Add To Cart
               </button>
-              <button type="button" className="product-btn-buy">
+              <button type="button" className="product-btn-buy" onClick={handleBuyItNow}>
                 Buy It Now
               </button>
               <button

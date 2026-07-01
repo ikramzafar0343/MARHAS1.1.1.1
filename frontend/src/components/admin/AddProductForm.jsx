@@ -2,11 +2,13 @@ import { useEffect, useRef, useState } from 'react';
 import { HiOutlinePhotograph, HiOutlineUpload } from 'react-icons/hi';
 import AdminProductVariants from './AdminProductVariants';
 import AdminSizePicker from './AdminSizePicker';
+import AdminProductSpecifications from './AdminProductSpecifications';
 import {
   ADMIN_PRODUCT_BEST_SELLER_OPTIONS,
   ADMIN_PRODUCT_CATEGORIES,
   ADMIN_PRODUCT_INITIAL_STATE,
-  ADMIN_PRODUCT_MAX_IMAGES
+  ADMIN_PRODUCT_MAX_IMAGES,
+  ADMIN_PRODUCT_SPECIFICATION_OPTIONS
 } from '../../constants/adminProductForm';
 
 const AddProductForm = ({ onCancel, onListProduct }) => {
@@ -79,6 +81,16 @@ const AddProductForm = ({ onCancel, onListProduct }) => {
     formData.append('bestSeller', form.bestSeller);
     formData.append('status', 'published');
     formData.append('stock', '10');
+    formData.append(
+      'specifications',
+      JSON.stringify(
+        ADMIN_PRODUCT_SPECIFICATION_OPTIONS.reduce((acc, option) => {
+          acc[option.key] = form.specifications[option.key]?.trim() || '';
+          return acc;
+        }, {})
+      )
+    );
+    formData.append('returnPolicy', form.returnPolicy.trim());
 
     if (form.discount) {
       formData.append('discount', String(form.discount));
@@ -226,6 +238,29 @@ const AddProductForm = ({ onCancel, onListProduct }) => {
               onChange={(sizes) => setForm((prev) => ({ ...prev, sizes }))}
             />
           </div>
+
+          <div className="admin-product-field admin-product-field--full">
+            <span className="admin-product-label">Specifications</span>
+            <AdminProductSpecifications
+              specifications={form.specifications}
+              onChange={(specifications) => setForm((prev) => ({ ...prev, specifications }))}
+            />
+          </div>
+
+          <label className="admin-product-field admin-product-field--full">
+            <span className="admin-product-label">Return Policy</span>
+            <textarea
+              name="returnPolicy"
+              value={form.returnPolicy}
+              onChange={updateField('returnPolicy')}
+              placeholder="Enter return, exchange, and delivery policy for this product..."
+              rows={5}
+              className="admin-product-input admin-product-textarea"
+            />
+            <span className="admin-product-spec-hint">
+              Each line appears as a separate paragraph on the product page.
+            </span>
+          </label>
 
           <div className="admin-product-field admin-product-field--full">
             <span className="admin-product-label">Homepage Best Sellers</span>

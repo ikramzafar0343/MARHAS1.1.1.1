@@ -79,6 +79,7 @@ const productBaseSchema = z.object({
   discountType: z.enum(Object.values(DISCOUNT_TYPES)).optional().default(DISCOUNT_TYPES.PERCENTAGE),
   description: descriptionSchema,
   specifications: specificationsSchema,
+  returnPolicy: z.string().trim().max(2000).optional().default(''),
   sizes: z.array(z.string().trim().min(1)).optional().default([]),
   colors: z.array(colorSchema).optional().default([]),
   variants: z.array(variantSchema).optional().default([]),

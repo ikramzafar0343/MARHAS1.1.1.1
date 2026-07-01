@@ -71,7 +71,7 @@ const descriptionSchema = new mongoose.Schema(
 const specificationsSchema = new mongoose.Schema(
   {
     composition: { type: String, trim: true, default: '' },
-    care: { type: String, trim: true, default: 'Dry clean only. Steam iron at medium temperature.' },
+    care: { type: String, trim: true, default: '' },
     includes: { type: String, trim: true, default: '' }
   },
   { _id: false }
@@ -129,6 +129,12 @@ const productSchema = new mongoose.Schema(
     specifications: {
       type: specificationsSchema,
       default: () => ({})
+    },
+    returnPolicy: {
+      type: String,
+      trim: true,
+      default: '',
+      maxlength: [2000, 'Return policy cannot exceed 2000 characters']
     },
     sizes: {
       type: [String],

@@ -46,10 +46,23 @@ const normalizeDescription = (description, name) => {
 };
 
 const normalizeSpecifications = (specifications) => ({
-  composition: specifications?.composition || '',
-  care: specifications?.care || 'Dry clean only.',
-  includes: specifications?.includes || ''
+  composition: specifications?.composition?.trim() || '',
+  care: specifications?.care?.trim() || '',
+  includes: specifications?.includes?.trim() || ''
 });
+
+const mapProductColors = (product) => {
+  if (product.colors?.length) {
+    return product.colors;
+  }
+
+  return (product.variants || [])
+    .map((variant) => ({
+      name: variant.colorName,
+      hex: variant.colorHex
+    }))
+    .filter((color) => color.name && color.hex);
+};
 
 export const mapApiProduct = (product) => {
   if (!product) {
@@ -72,8 +85,9 @@ export const mapApiProduct = (product) => {
     hoverImage: images[1] || images[0] || null,
     description: normalizeDescription(product.description, product.title),
     specifications: normalizeSpecifications(product.specifications),
+    returnPolicy: product.returnPolicy?.trim() || '',
     sizes: product.sizes || [],
-    colors: product.colors || [],
+    colors: mapProductColors(product),
     variants: product.variants || [],
     sku: product.sku,
     stock: product.stock ?? 0,

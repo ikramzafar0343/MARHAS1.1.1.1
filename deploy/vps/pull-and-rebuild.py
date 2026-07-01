@@ -32,10 +32,27 @@ git reset --hard "origin/__BRANCH__"
 echo "==> Rotating JWT secrets..."
 ENV_FILE="$APP_DIR/Backend/.env"
 if [ -f "$ENV_FILE" ]; then
-  ACCESS="$(openssl rand -base64 48)"
-  REFRESH="$(openssl rand -base64 48)"
-  sed -i "s/^JWT_ACCESS_SECRET=.*/JWT_ACCESS_SECRET=${ACCESS}/" "$ENV_FILE"
-  sed -i "s/^JWT_REFRESH_SECRET=.*/JWT_REFRESH_SECRET=${REFRESH}/" "$ENV_FILE"
+  ACCESS="$(openssl rand -base64 48 | tr -d '/+=')"
+  REFRESH="$(openssl rand -base64 48 | tr -d '/+=')"
+  export ENV_FILE ACCESS REFRESH
+  python3 - <<'PY'
+from pathlib import Path
+import os
+
+env_path = Path(os.environ["ENV_FILE"])
+access = os.environ["ACCESS"]
+refresh = os.environ["REFRESH"]
+lines = env_path.read_text().splitlines()
+updated = []
+for line in lines:
+    if line.startswith("JWT_ACCESS_SECRET="):
+        updated.append(f"JWT_ACCESS_SECRET={access}")
+    elif line.startswith("JWT_REFRESH_SECRET="):
+        updated.append(f"JWT_REFRESH_SECRET={refresh}")
+    else:
+        updated.append(line)
+env_path.write_text("\n".join(updated) + "\n")
+PY
 fi
 
 echo "==> Installing dependencies..."

@@ -90,14 +90,21 @@ const createTransport = () => {
     return null;
   }
 
+  const port = env.SMTP_PORT || 587;
+  const secure = env.SMTP_SECURE ?? port === 465;
+
   return nodemailer.createTransport({
     host: env.SMTP_HOST,
-    port: env.SMTP_PORT || 587,
-    secure: env.SMTP_SECURE ?? false,
+    port,
+    secure,
     auth:
       env.SMTP_USER && env.SMTP_PASS
         ? { user: env.SMTP_USER, pass: env.SMTP_PASS }
-        : undefined
+        : undefined,
+    tls: {
+      minVersion: 'TLSv1.2',
+      rejectUnauthorized: env.NODE_ENV === 'production'
+    }
   });
 };
 
@@ -117,6 +124,21 @@ export class EmailService {
   async sendMail({ to, subject, html, text }) {
     if (!this.transporter) {
       logger.warn({ to, subject }, 'Email skipped — SMTP not configured');
+
+      if (env.NODE_ENV === 'production') {
+        throw new Error('SMTP is not configured on the server');
+      }
+
+      return { messageId: null, preview: true, to, subject };
+    }
+
+    if (!env.SMTP_USER || !env.SMTP_PASS) {
+      logger.warn({ to, subject }, 'Email skipped — SMTP credentials missing');
+
+      if (env.NODE_ENV === 'production') {
+        throw new Error('SMTP credentials are not configured on the server');
+      }
+
       return { messageId: null, preview: true, to, subject };
     }
 

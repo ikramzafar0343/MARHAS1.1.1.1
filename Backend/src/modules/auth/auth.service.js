@@ -143,20 +143,30 @@ export class AuthService {
       expiresAt: emailService.getAdminOtpExpiry()
     });
 
-    try {
-      await emailService.sendAdminLoginOtpEmail({
-        to: env.SUPPORT_EMAIL,
-        adminName: user.name,
-        adminEmail: user.email,
-        otp
-      });
-    } catch (error) {
-      await this.userRepository.clearAdminLoginOtp(user._id);
-      logger.warn({ err: error.message, email: user.email }, 'Admin OTP email failed');
-      throw new AppError('Unable to send verification code. Try again shortly.', 503);
-    }
+    const smtpReady =
+      emailService.isConfigured() && Boolean(env.SMTP_USER) && Boolean(env.SMTP_PASS);
 
-    if (!emailService.isConfigured()) {
+    if (smtpReady) {
+      try {
+        await emailService.sendAdminLoginOtpEmail({
+          to: env.SUPPORT_EMAIL,
+          adminName: user.name,
+          adminEmail: user.email,
+          otp
+        });
+      } catch (error) {
+        await this.userRepository.clearAdminLoginOtp(user._id);
+        logger.warn({ err: error.message, email: user.email }, 'Admin OTP email failed');
+        throw new AppError('Unable to send verification code. Check SMTP settings and try again.', 503);
+      }
+    } else if (env.NODE_ENV === 'production') {
+      await this.userRepository.clearAdminLoginOtp(user._id);
+      logger.error('Admin OTP blocked — SMTP is not configured in production');
+      throw new AppError(
+        'Email delivery is not configured on the server. Add Hostinger SMTP settings and restart the app.',
+        503
+      );
+    } else {
       logger.info({ email: user.email, otp }, 'Admin OTP email skipped — SMTP not configured');
     }
 
@@ -168,7 +178,7 @@ export class AuthService {
 
     if (env.NODE_ENV === 'test') {
       response.otp = otp;
-    } else if (env.NODE_ENV !== 'production' && !emailService.isConfigured()) {
+    } else if (env.NODE_ENV !== 'production' && !smtpReady) {
       response.devOtp = otp;
     }
 

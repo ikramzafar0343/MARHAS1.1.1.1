@@ -14,7 +14,7 @@ const useCategoryStackAnimation = (stackRef, cardCount) => {
 
     const media = gsap.matchMedia();
 
-    media.add('(prefers-reduced-motion: no-preference)', () => {
+    media.add('(min-width: 1024px) and (prefers-reduced-motion: no-preference)', () => {
       const cards = gsap.utils.toArray('.category-card', stackRef.current);
 
       if (cards.length < 2) {

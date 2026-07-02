@@ -37,6 +37,13 @@ const envSchema = z.object({
   AWS_ACCESS_KEY_ID: z.string().optional(),
   AWS_SECRET_ACCESS_KEY: z.string().optional(),
   AWS_S3_BUCKET: z.string().optional(),
+  WHATSAPP_ENABLED: z
+    .string()
+    .optional()
+    .transform((value) => value === 'true'),
+  WHATSAPP_ACCESS_TOKEN: z.string().optional(),
+  WHATSAPP_PHONE_NUMBER_ID: z.string().optional(),
+  WHATSAPP_API_VERSION: z.string().default('v21.0'),
   SEED_ADMIN_EMAIL: z.string().email().default('admin@marhas.com'),
   SEED_ADMIN_PASSWORD: z.string().min(8).default('Marhas@Admin123'),
   SEED_ADMIN_NAME: z.string().default('MARHAS Admin'),

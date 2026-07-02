@@ -63,10 +63,25 @@ export const resolveCartItems = (cartItems, getProductById = lookupProduct) =>
   cartItems
     .map((item) => {
       const product = getProductById(item.productId);
-      if (!product) {
-        return null;
+
+      if (product) {
+        return { item, product };
       }
 
-      return { item, product };
+      if (item.productName) {
+        return {
+          item,
+          product: {
+            id: item.productId,
+            name: item.productName,
+            price: item.productPrice,
+            image: item.productImage || ''
+          }
+        };
+      }
+
+      return null;
     })
     .filter(Boolean);
+
+export const resolveOrderItems = resolveCartItems;

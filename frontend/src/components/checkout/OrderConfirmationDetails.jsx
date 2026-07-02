@@ -1,7 +1,7 @@
-import { formatOrderDate, formatPaymentMethod, formatPrice, resolveCartItems } from '../../utils/cart';
+import { formatOrderDate, formatPaymentMethod, formatPrice, resolveOrderItems } from '../../utils/cart';
 
 const OrderConfirmationDetails = ({ order }) => {
-  const resolvedItems = order?.items ? resolveCartItems(order.items) : [];
+  const resolvedItems = order?.items ? resolveOrderItems(order.items) : [];
 
   if (!order) {
     return null;

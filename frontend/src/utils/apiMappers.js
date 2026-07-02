@@ -158,6 +158,17 @@ export const mapApiInventoryItem = (item) => ({
 
 export const mapCheckoutOrder = (order, cartItems = []) => {
   const orderNumber = (order.orderNumber || '').replace(/^#/, '');
+  const mappedItems = (order.items || []).map((item, index) => ({
+    lineId: item._id || item.lineId || `line-${index}`,
+    productId: item.productId?._id || item.productId,
+    quantity: item.quantity,
+    size: item.size || '',
+    color: item.color || '',
+    colorHex: item.colorHex || '',
+    productName: item.name,
+    productPrice: item.price,
+    productImage: item.imageUrl || null
+  }));
 
   return {
     id: orderNumber,
@@ -169,7 +180,7 @@ export const mapCheckoutOrder = (order, cartItems = []) => {
     city: order.shipping?.city,
     postalCode: order.shipping?.postalCode,
     paymentMethod: order.paymentMethod,
-    items: cartItems,
+    items: mappedItems.length ? mappedItems : cartItems,
     subtotal: order.subtotal,
     total: order.total,
     shippingFee: order.shippingFee,

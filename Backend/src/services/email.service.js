@@ -82,7 +82,52 @@ export const emailTemplates = {
       <p style="font-size: 28px; letter-spacing: 0.35em; text-align: center; margin: 24px 0; color: ${BRAND_COLOR};">${otp}</p>
       <p>Enter this verification code to complete admin access. It expires in ${expiresMinutes} minutes.</p>
       <p>If you did not attempt to sign in, secure your admin account immediately.</p>
-    `)
+    `),
+
+  orderConfirmation: ({
+    customerName,
+    orderNumber,
+    itemsHtml,
+    subtotal,
+    shippingFee,
+    taxAmount,
+    taxLabel,
+    taxRate,
+    total,
+    paymentMethod,
+    shippingAddress,
+    orderUrl
+  }) => {
+    const taxRow =
+      taxAmount > 0
+        ? `<tr><td style="padding: 6px 0;">${taxLabel}${taxRate ? ` (${taxRate}%)` : ''}</td><td style="padding: 6px 0; text-align: right;">PKR ${Number(taxAmount).toLocaleString('en-PK')}</td></tr>`
+        : '';
+
+    return wrapTemplate(`
+      <h1>Order confirmed</h1>
+      <p>Dear ${customerName || 'Customer'},</p>
+      <p>Thank you for shopping with MARHAS. Your order <strong>${orderNumber}</strong> has been received and is being prepared.</p>
+      <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+        <thead>
+          <tr>
+            <th style="text-align: left; padding-bottom: 8px; border-bottom: 1px solid #ece4da; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: #8a8278;">Item</th>
+            <th style="text-align: right; padding-bottom: 8px; border-bottom: 1px solid #ece4da; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: #8a8278;">Amount</th>
+          </tr>
+        </thead>
+        <tbody>${itemsHtml}</tbody>
+      </table>
+      <table style="width: 100%; border-collapse: collapse; margin: 0 0 20px;">
+        <tr><td style="padding: 6px 0;">Subtotal</td><td style="padding: 6px 0; text-align: right;">PKR ${Number(subtotal).toLocaleString('en-PK')}</td></tr>
+        <tr><td style="padding: 6px 0;">Shipping</td><td style="padding: 6px 0; text-align: right;">${shippingFee === 0 ? 'Free' : `PKR ${Number(shippingFee).toLocaleString('en-PK')}`}</td></tr>
+        ${taxRow}
+        <tr><td style="padding: 10px 0; font-weight: 600;">Total Paid</td><td style="padding: 10px 0; text-align: right; font-weight: 600;">PKR ${Number(total).toLocaleString('en-PK')}</td></tr>
+      </table>
+      <p><strong>Payment:</strong> ${paymentMethod}</p>
+      <p><strong>Delivery:</strong><br />${shippingAddress}</p>
+      <a class="button" href="${orderUrl}">View Order</a>
+      <p>You can download your invoice from the order confirmation page.</p>
+    `);
+  }
 };
 
 const createTransport = () => {
@@ -224,6 +269,67 @@ export class EmailService {
       to,
       subject: 'Welcome to MARHAS',
       html: emailTemplates.welcome({ name })
+    });
+  }
+
+  formatPaymentMethod(method) {
+    if (method === 'online') {
+      return 'Online Payment';
+    }
+
+    return 'Cash on Delivery';
+  }
+
+  buildOrderItemsHtml(items = []) {
+    return items
+      .map((item) => {
+        const meta = [item.color, item.size ? `Size ${item.size}` : null, `Qty ${item.quantity}`]
+          .filter(Boolean)
+          .join(' · ');
+
+        return `
+          <tr>
+            <td style="padding: 10px 0; border-bottom: 1px solid #ece4da;">
+              <strong>${item.name}</strong><br />
+              <span style="font-size: 13px; color: #8a8278;">${meta}</span>
+            </td>
+            <td style="padding: 10px 0; border-bottom: 1px solid #ece4da; text-align: right; white-space: nowrap;">
+              PKR ${Number(item.price * item.quantity).toLocaleString('en-PK')}
+            </td>
+          </tr>
+        `;
+      })
+      .join('');
+  }
+
+  async sendOrderConfirmationEmail({ order, orderUrl }) {
+    const orderNumber = order.orderNumber?.replace(/^#/, '') || order.orderNumber;
+    const shippingAddress = [
+      order.customer,
+      order.shipping?.address,
+      [order.shipping?.city, order.shipping?.postalCode].filter(Boolean).join(', '),
+      order.phone
+    ]
+      .filter(Boolean)
+      .join('<br />');
+
+    return this.sendMail({
+      to: order.email,
+      subject: `MARHAS order confirmation ${orderNumber}`,
+      html: emailTemplates.orderConfirmation({
+        customerName: order.customer,
+        orderNumber,
+        itemsHtml: this.buildOrderItemsHtml(order.items),
+        subtotal: order.subtotal,
+        shippingFee: order.shippingFee,
+        taxAmount: order.taxAmount ?? 0,
+        taxLabel: order.taxLabel || 'GST',
+        taxRate: order.taxRate ?? 0,
+        total: order.total,
+        paymentMethod: this.formatPaymentMethod(order.paymentMethod),
+        shippingAddress,
+        orderUrl
+      })
     });
   }
 }

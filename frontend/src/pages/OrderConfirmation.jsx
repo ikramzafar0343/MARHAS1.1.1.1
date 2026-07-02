@@ -5,6 +5,7 @@ import BrandWordmark from '../components/ui/BrandWordmark';
 import { Container } from '../components/ui/Layout';
 import OrderConfirmationDetails from '../components/checkout/OrderConfirmationDetails';
 import { useGlobalContext } from '../context/GlobalContext';
+import { downloadOrderInvoice } from '../utils/orderInvoice';
 
 const OrderConfirmation = () => {
   const { orderId } = useParams();
@@ -30,8 +31,16 @@ const OrderConfirmation = () => {
           <p className="order-confirmation-lead">
             {order?.email ? (
               <>
-                A confirmation has been sent to{' '}
-                <span className="order-confirmation-email">{order.email}</span>.
+                A confirmation email has been sent to{' '}
+                <span className="order-confirmation-email">{order.email}</span>
+                {order.phone ? (
+                  <>
+                    {' '}
+                    and a WhatsApp message to{' '}
+                    <span className="order-confirmation-email">{order.phone}</span>
+                  </>
+                ) : null}
+                .
               </>
             ) : (
               <>
@@ -66,6 +75,15 @@ const OrderConfirmation = () => {
         </div>
 
         <div className="order-confirmation-actions">
+          {order ? (
+            <button
+              type="button"
+              className="luxury-button-outline"
+              onClick={() => downloadOrderInvoice(order)}
+            >
+              Download Invoice
+            </button>
+          ) : null}
           <Link to="/collections/all" className="luxury-button-solid">
             Continue Shopping
           </Link>

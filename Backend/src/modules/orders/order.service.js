@@ -16,6 +16,7 @@ import {
   calculateTaxAmount
 } from '../../constants/commerceDefaults.js';
 import { storefrontRepository } from '../storefront/storefront.repository.js';
+import { sendOrderConfirmationNotifications } from './order.notifications.js';
 
 const getEffectivePrice = (product) => {
   if (!product.discount || product.discount <= 0) {
@@ -118,7 +119,7 @@ export class OrderService {
         stockAdjustments.push({ productId: item.productId, quantity: item.quantity });
       }
 
-      return await this.orderRepository.create(
+      const created = await this.orderRepository.create(
         {
           userId,
           customer: payload.fullName.trim(),
@@ -142,6 +143,10 @@ export class OrderService {
         },
         { updatedBy: userId }
       );
+
+      void sendOrderConfirmationNotifications(created);
+
+      return created;
     } catch (error) {
       for (const adjustment of stockAdjustments) {
         await this.productRepository.adjustStock(adjustment.productId, adjustment.quantity, {

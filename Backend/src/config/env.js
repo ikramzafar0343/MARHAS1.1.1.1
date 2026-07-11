@@ -18,10 +18,16 @@ const envSchema = z.object({
   RATE_LIMIT_MAX: z.coerce.number().default(100),
   SMTP_HOST: z.string().optional(),
   SMTP_PORT: z.coerce.number().optional(),
-  SMTP_SECURE: z
-    .string()
-    .optional()
-    .transform((v) => v === 'true'),
+  SMTP_SECURE: z.preprocess(
+    (value) => {
+      if (value === '' || value === undefined || value === null) {
+        return undefined;
+      }
+
+      return value === 'true' || value === true;
+    },
+    z.boolean().optional()
+  ),
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
   EMAIL_FROM: z.string().default('MARHAS <noreply@marhas.com>'),

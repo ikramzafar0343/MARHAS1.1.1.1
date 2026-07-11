@@ -1,6 +1,11 @@
 import crypto from 'node:crypto';
 import nodemailer from 'nodemailer';
 import { env } from '../config/env.js';
+import {
+  buildSmtpTransportOptions,
+  getSmtpReadiness,
+  resolveEmailFrom
+} from '../config/smtp.js';
 import { logger } from '../utils/logger.js';
 
 const BRAND_COLOR = '#4A4238';
@@ -131,26 +136,8 @@ export const emailTemplates = {
 };
 
 const createTransport = () => {
-  if (!env.SMTP_HOST) {
-    return null;
-  }
-
-  const port = env.SMTP_PORT || 587;
-  const secure = env.SMTP_SECURE ?? port === 465;
-
-  return nodemailer.createTransport({
-    host: env.SMTP_HOST,
-    port,
-    secure,
-    auth:
-      env.SMTP_USER && env.SMTP_PASS
-        ? { user: env.SMTP_USER, pass: env.SMTP_PASS }
-        : undefined,
-    tls: {
-      minVersion: 'TLSv1.2',
-      rejectUnauthorized: env.NODE_ENV === 'production'
-    }
-  });
+  const options = buildSmtpTransportOptions();
+  return options ? nodemailer.createTransport(options) : null;
 };
 
 let transporter = createTransport();
@@ -158,12 +145,25 @@ let transporter = createTransport();
 export class EmailService {
   constructor(options = {}) {
     this.transporter = options.transporter ?? transporter;
-    this.from = options.from ?? env.EMAIL_FROM;
+    this.from = options.from ?? resolveEmailFrom();
     this.appUrl = options.appUrl ?? env.APP_URL;
   }
 
   isConfigured() {
-    return Boolean(this.transporter);
+    return getSmtpReadiness().configured && Boolean(this.transporter);
+  }
+
+  async verifyConnection() {
+    if (!this.transporter || !getSmtpReadiness().configured) {
+      return { ok: false, reason: 'SMTP is not fully configured' };
+    }
+
+    try {
+      await this.transporter.verify();
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, reason: error.message };
+    }
   }
 
   async sendMail({ to, subject, html, text }) {

@@ -143,8 +143,7 @@ export class AuthService {
       expiresAt: emailService.getAdminOtpExpiry()
     });
 
-    const smtpReady =
-      emailService.isConfigured() && Boolean(env.SMTP_USER) && Boolean(env.SMTP_PASS);
+    const smtpReady = emailService.isConfigured();
 
     if (smtpReady) {
       try {

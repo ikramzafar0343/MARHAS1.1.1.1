@@ -8,6 +8,10 @@
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
     "seed": "node src/database/seed.js",
+    "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
+    "db:seed": "node src/database/seed.js",
+    "db:generate": "prisma generate",
     "reset:content": "node src/database/resetContent.js",
     "test": "cross-env NODE_ENV=test node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage --runInBand --forceExit",
     "test:watch": "cross-env NODE_ENV=test node --experimental-vm-modules node_modules/jest/bin/jest.js --watch"
@@ -19,11 +23,16 @@
     "marhas",
     "ecommerce",
     "api",
-    "mongodb"
+    "postgresql",
+    "prisma"
   ],
   "author": "MARHAS",
   "license": "MIT",
+  "prisma": {
+    "seed": "node src/database/seed.js"
+  },
   "dependencies": {
+    "@prisma/client": "^6.19.3",
     "bcrypt": "^6.0.0",
     "compression": "^1.8.1",
     "cookie-parser": "^1.4.7",
@@ -33,7 +42,6 @@
     "express-rate-limit": "^8.5.2",
     "helmet": "^8.2.0",
     "jsonwebtoken": "^9.0.3",
-    "mongoose": "^9.6.3",
     "multer": "^2.1.1",
     "nodemailer": "^9.0.3",
     "pino": "^10.3.1",
@@ -46,7 +54,7 @@
   "devDependencies": {
     "cross-env": "^7.0.3",
     "jest": "^29.7.0",
-    "mongodb-memory-server": "^10.4.3",
+    "prisma": "^6.19.3",
     "supertest": "^7.2.2"
   },
   "jest": {

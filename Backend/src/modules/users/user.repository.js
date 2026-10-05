@@ -1,106 +1,131 @@
-import { User } from './user.model.js';
+import { randomUUID } from 'crypto';
+import { prisma } from '../../database/prisma.js';
+import { toEntity, softDeleteFilter } from '../../database/mapper.js';
 import { AppError } from '../../utils/AppError.js';
 
+const mapUser = (row, { includeWishlist = true } = {}) => {
+  if (!row) return null;
+  const entity = toEntity(row);
+  const wishlist = includeWishlist
+    ? (row.wishlistItems || []).map((item) => item.productId)
+    : undefined;
+
+  return {
+    ...entity,
+    wishlist: wishlist ?? entity.wishlist ?? [],
+    addresses: Array.isArray(entity.addresses) ? entity.addresses : [],
+    refreshTokens: Array.isArray(entity.refreshTokens) ? entity.refreshTokens : []
+  };
+};
+
+const withWishlist = {
+  wishlistItems: true
+};
+
 export class UserRepository {
-  constructor(model = User) {
-    this.model = model;
+  constructor(client = prisma) {
+    this.db = client;
   }
 
   async create(data, options = {}) {
-    const user = new this.model(data);
-    if (options.updatedBy) {
-      user.updatedBy = options.updatedBy;
-    }
-    return user.save();
+    const { wishlist, ...rest } = data;
+    const user = await this.db.user.create({
+      data: {
+        ...rest,
+        email: data.email.toLowerCase().trim(),
+        updatedBy: options.updatedBy ?? data.updatedBy ?? null,
+        createdBy: options.updatedBy ?? data.createdBy ?? null
+      },
+      include: withWishlist
+    });
+    return mapUser(user);
   }
 
   async findById(id, options = {}) {
-    let query = this.model.findById(id);
-
-    if (options.includePassword) {
-      query = query.select('+passwordHash');
-    }
-    if (options.includeRefreshTokens) {
-      query = query.select('+refreshTokens');
-    }
-    if (options.includeVerification) {
-      query = query.select('+emailVerificationToken +emailVerificationExpires');
-    }
-    if (options.includeReset) {
-      query = query.select('+passwordResetToken +passwordResetExpires');
-    }
-    if (options.includeDeleted) {
-      query = query.setOptions({ includeDeleted: true });
-    }
-
-    return query.exec();
+    const user = await this.db.user.findFirst({
+      where: { id, ...softDeleteFilter(options.includeDeleted) },
+      include: withWishlist
+    });
+    return mapUser(user);
   }
 
   async findByEmail(email, options = {}) {
-    let query = this.model.findOne({ email: email.toLowerCase().trim() });
-
-    if (options.includePassword) {
-      query = query.select('+passwordHash');
-    }
-    if (options.includeRefreshTokens) {
-      query = query.select('+refreshTokens');
-    }
-    if (options.includeVerification) {
-      query = query.select('+emailVerificationToken +emailVerificationExpires');
-    }
-    if (options.includeReset) {
-      query = query.select('+passwordResetToken +passwordResetExpires');
-    }
-    if (options.includeDeleted) {
-      query = query.setOptions({ includeDeleted: true });
-    }
-
-    return query.exec();
+    const user = await this.db.user.findFirst({
+      where: {
+        email: email.toLowerCase().trim(),
+        ...softDeleteFilter(options.includeDeleted)
+      },
+      include: withWishlist
+    });
+    return mapUser(user);
   }
 
   async findByVerificationToken(token) {
-    return this.model
-      .findOne({
+    const user = await this.db.user.findFirst({
+      where: {
         emailVerificationToken: token,
-        emailVerificationExpires: { $gt: new Date() }
-      })
-      .select('+emailVerificationToken +emailVerificationExpires')
-      .exec();
+        emailVerificationExpires: { gt: new Date() },
+        deletedAt: null
+      },
+      include: withWishlist
+    });
+    return mapUser(user);
   }
 
   async findByResetToken(token) {
-    return this.model
-      .findOne({
+    const user = await this.db.user.findFirst({
+      where: {
         passwordResetToken: token,
-        passwordResetExpires: { $gt: new Date() }
-      })
-      .select('+passwordResetToken +passwordResetExpires +passwordHash')
-      .exec();
+        passwordResetExpires: { gt: new Date() },
+        deletedAt: null
+      },
+      include: withWishlist
+    });
+    return mapUser(user);
   }
 
   async findByRefreshTokenHash(tokenHash) {
-    return this.model
-      .findOne({
-        'refreshTokens.tokenHash': tokenHash,
-        'refreshTokens.revokedAt': null,
-        'refreshTokens.expiresAt': { $gt: new Date() }
-      })
-      .select('+refreshTokens')
-      .exec();
+    const users = await this.db.user.findMany({
+      where: { deletedAt: null },
+      include: withWishlist
+    });
+
+    const now = Date.now();
+    const match = users.find((user) =>
+      (user.refreshTokens || []).some(
+        (entry) =>
+          entry.tokenHash === tokenHash &&
+          !entry.revokedAt &&
+          new Date(entry.expiresAt).getTime() > now
+      )
+    );
+
+    return mapUser(match || null);
   }
 
-  async findPaginated({ page = 1, limit = 20, filter = {}, sort = { createdAt: -1 } } = {}) {
+  async findPaginated({ page = 1, limit = 20, filter = {}, sort = { createdAt: 'desc' } } = {}) {
     const safePage = Math.max(1, page);
     const safeLimit = Math.min(Math.max(1, limit), 100);
     const skip = (safePage - 1) * safeLimit;
+    const where = { deletedAt: null, ...filter };
+
+    const orderBy = Object.entries(sort).map(([key, value]) => ({
+      [key]: value === 1 || value === 'asc' ? 'asc' : 'desc'
+    }));
 
     const [docs, total] = await Promise.all([
-      this.model.find(filter).sort(sort).skip(skip).limit(safeLimit).lean(),
-      this.model.countDocuments(filter)
+      this.db.user.findMany({
+        where,
+        orderBy,
+        skip,
+        take: safeLimit,
+        include: withWishlist
+      }),
+      this.db.user.count({ where })
     ]);
 
     return {
-      docs,
+      docs: docs.map((doc) => mapUser(doc)),
       pagination: {
         page: safePage,
         limit: safeLimit,
@@ -114,244 +139,201 @@ export class UserRepository {
 
   async updateById(id, data, options = {}) {
     const update = { ...data };
-    if (options.updatedBy) {
-      update.updatedBy = options.updatedBy;
-    }
+    if (options.updatedBy) update.updatedBy = options.updatedBy;
+    if (update.email) update.email = update.email.toLowerCase().trim();
 
-    return this.model
-      .findByIdAndUpdate(id, update, { returnDocument: 'after', runValidators: true })
-      .exec();
+    try {
+      const user = await this.db.user.update({
+        where: { id },
+        data: update,
+        include: withWishlist
+      });
+      return mapUser(user);
+    } catch {
+      return null;
+    }
   }
 
   async updatePassword(id, passwordHash, updatedBy = null) {
-    const update = {
-      passwordHash,
-      passwordResetToken: null,
-      passwordResetExpires: null
-    };
-    if (updatedBy) {
-      update.updatedBy = updatedBy;
-    }
-
-    return this.model
-      .findByIdAndUpdate(id, update, { returnDocument: 'after', runValidators: true })
-      .exec();
+    return this.updateById(
+      id,
+      {
+        passwordHash,
+        passwordResetToken: null,
+        passwordResetExpires: null
+      },
+      { updatedBy }
+    );
   }
 
   async markEmailVerified(id, updatedBy = null) {
-    const update = {
-      isEmailVerified: true,
-      emailVerificationToken: null,
-      emailVerificationExpires: null
-    };
-    if (updatedBy) {
-      update.updatedBy = updatedBy;
-    }
-
-    return this.model
-      .findByIdAndUpdate(id, update, { returnDocument: 'after', runValidators: true })
-      .exec();
+    return this.updateById(
+      id,
+      {
+        isEmailVerified: true,
+        emailVerificationToken: null,
+        emailVerificationExpires: null
+      },
+      { updatedBy }
+    );
   }
 
   async setVerificationToken(id, token, expiresAt) {
-    return this.model
-      .findByIdAndUpdate(
-        id,
-        { emailVerificationToken: token, emailVerificationExpires: expiresAt },
-        { returnDocument: 'after', runValidators: true }
-      )
-      .exec();
+    return this.updateById(id, {
+      emailVerificationToken: token,
+      emailVerificationExpires: expiresAt
+    });
   }
 
   async setPasswordResetToken(id, token, expiresAt) {
-    return this.model
-      .findByIdAndUpdate(
-        id,
-        { passwordResetToken: token, passwordResetExpires: expiresAt },
-        { returnDocument: 'after', runValidators: true }
-      )
-      .exec();
+    return this.updateById(id, {
+      passwordResetToken: token,
+      passwordResetExpires: expiresAt
+    });
   }
 
   async setAdminLoginOtp(id, { challengeId, otpHash, expiresAt }) {
-    return this.model
-      .findByIdAndUpdate(
-        id,
-        {
-          adminLoginChallengeId: challengeId,
-          adminLoginOtpHash: otpHash,
-          adminLoginOtpExpires: expiresAt
-        },
-        { returnDocument: 'after', runValidators: true }
-      )
-      .exec();
+    return this.updateById(id, {
+      adminLoginChallengeId: challengeId,
+      adminLoginOtpHash: otpHash,
+      adminLoginOtpExpires: expiresAt
+    });
   }
 
   async findByAdminLoginChallenge(challengeId) {
-    return this.model
-      .findOne({
+    const user = await this.db.user.findFirst({
+      where: {
         adminLoginChallengeId: challengeId,
-        adminLoginOtpExpires: { $gt: new Date() }
-      })
-      .select('+adminLoginOtpHash +adminLoginOtpExpires +adminLoginChallengeId')
-      .exec();
+        adminLoginOtpExpires: { gt: new Date() },
+        deletedAt: null
+      },
+      include: withWishlist
+    });
+    return mapUser(user);
   }
 
   async clearAdminLoginOtp(id) {
-    return this.model
-      .findByIdAndUpdate(
-        id,
-        {
-          adminLoginChallengeId: null,
-          adminLoginOtpHash: null,
-          adminLoginOtpExpires: null
-        },
-        { returnDocument: 'after', runValidators: true }
-      )
-      .exec();
+    return this.updateById(id, {
+      adminLoginChallengeId: null,
+      adminLoginOtpHash: null,
+      adminLoginOtpExpires: null
+    });
   }
 
   async addRefreshToken(id, tokenEntry) {
-    return this.model
-      .findByIdAndUpdate(
-        id,
-        { $push: { refreshTokens: tokenEntry } },
-        { returnDocument: 'after', runValidators: true }
-      )
-      .select('+refreshTokens')
-      .exec();
+    const user = await this.db.user.findFirst({ where: { id, deletedAt: null } });
+    if (!user) return null;
+    const refreshTokens = [...(user.refreshTokens || []), tokenEntry];
+    return this.updateById(id, { refreshTokens });
   }
 
   async revokeRefreshToken(id, tokenHash) {
-    return this.model
-      .findOneAndUpdate(
-        { _id: id, 'refreshTokens.tokenHash': tokenHash },
-        { $set: { 'refreshTokens.$.revokedAt': new Date() } },
-        { returnDocument: 'after' }
-      )
-      .select('+refreshTokens')
-      .exec();
+    const user = await this.db.user.findFirst({ where: { id, deletedAt: null } });
+    if (!user) return null;
+    const refreshTokens = (user.refreshTokens || []).map((entry) =>
+      entry.tokenHash === tokenHash ? { ...entry, revokedAt: new Date().toISOString() } : entry
+    );
+    return this.updateById(id, { refreshTokens });
   }
 
   async revokeAllRefreshTokens(id) {
-    const user = await this.model.findById(id).select('+refreshTokens').exec();
-    if (!user) {
-      return null;
-    }
-
-    const revokedAt = new Date();
-    user.refreshTokens.forEach((entry) => {
-      if (!entry.revokedAt) {
-        entry.revokedAt = revokedAt;
-      }
-    });
-
-    return user.save();
+    const user = await this.db.user.findFirst({ where: { id, deletedAt: null } });
+    if (!user) return null;
+    const revokedAt = new Date().toISOString();
+    const refreshTokens = (user.refreshTokens || []).map((entry) =>
+      entry.revokedAt ? entry : { ...entry, revokedAt }
+    );
+    return this.updateById(id, { refreshTokens });
   }
 
   async pruneExpiredRefreshTokens(id) {
-    return this.model
-      .findByIdAndUpdate(
-        id,
-        { $pull: { refreshTokens: { expiresAt: { $lt: new Date() } } } },
-        { returnDocument: 'after' }
-      )
-      .select('+refreshTokens')
-      .exec();
+    const user = await this.db.user.findFirst({ where: { id, deletedAt: null } });
+    if (!user) return null;
+    const now = Date.now();
+    const refreshTokens = (user.refreshTokens || []).filter(
+      (entry) => new Date(entry.expiresAt).getTime() >= now
+    );
+    return this.updateById(id, { refreshTokens });
   }
 
   async addToWishlist(userId, productId) {
-    return this.model
-      .findByIdAndUpdate(
-        userId,
-        { $addToSet: { wishlist: productId } },
-        { returnDocument: 'after', runValidators: true }
-      )
-      .exec();
+    await this.db.wishlistItem.upsert({
+      where: { userId_productId: { userId, productId } },
+      create: { userId, productId },
+      update: {}
+    });
+    return this.findById(userId);
   }
 
   async removeFromWishlist(userId, productId) {
-    return this.model
-      .findByIdAndUpdate(
-        userId,
-        { $pull: { wishlist: productId } },
-        { returnDocument: 'after', runValidators: true }
-      )
-      .exec();
+    await this.db.wishlistItem.deleteMany({ where: { userId, productId } });
+    return this.findById(userId);
   }
 
   async addAddress(userId, address) {
-    const user = await this.findById(userId);
-    if (!user) {
-      return null;
-    }
+    const user = await this.db.user.findFirst({ where: { id: userId, deletedAt: null } });
+    if (!user) return null;
 
+    let addresses = Array.isArray(user.addresses) ? [...user.addresses] : [];
     if (address.isDefault) {
-      user.addresses.forEach((entry) => {
-        entry.isDefault = false;
-      });
+      addresses = addresses.map((entry) => ({ ...entry, isDefault: false }));
     }
 
-    user.addresses.push(address);
-    return user.save();
+    addresses.push({
+      ...address,
+      _id: address._id || randomUUID(),
+      id: address.id || address._id || randomUUID()
+    });
+
+    return this.updateById(userId, { addresses });
   }
 
   async updateAddress(userId, addressId, updates) {
-    const user = await this.findById(userId);
-    if (!user) {
-      return null;
-    }
+    const user = await this.db.user.findFirst({ where: { id: userId, deletedAt: null } });
+    if (!user) return null;
 
-    const address = user.addresses.id(addressId);
-    if (!address) {
-      return null;
-    }
+    let addresses = Array.isArray(user.addresses) ? [...user.addresses] : [];
+    const index = addresses.findIndex(
+      (entry) => entry._id === addressId || entry.id === addressId
+    );
+    if (index < 0) return null;
 
     if (updates.isDefault) {
-      user.addresses.forEach((entry) => {
-        entry.isDefault = entry._id.toString() === addressId.toString();
-      });
+      addresses = addresses.map((entry, i) => ({
+        ...entry,
+        isDefault: i === index
+      }));
     }
 
-    Object.assign(address, updates);
-    return user.save();
+    addresses[index] = { ...addresses[index], ...updates };
+    return this.updateById(userId, { addresses });
   }
 
   async removeAddress(userId, addressId) {
-    return this.model
-      .findByIdAndUpdate(
-        userId,
-        { $pull: { addresses: { _id: addressId } } },
-        { returnDocument: 'after', runValidators: true }
-      )
-      .exec();
+    const user = await this.db.user.findFirst({ where: { id: userId, deletedAt: null } });
+    if (!user) return null;
+    const addresses = (user.addresses || []).filter(
+      (entry) => entry._id !== addressId && entry.id !== addressId
+    );
+    return this.updateById(userId, { addresses });
   }
 
   async softDeleteById(id, updatedBy = null) {
-    const user = await this.findById(id);
-    if (!user) {
-      return null;
-    }
-    return user.softDelete(updatedBy);
+    return this.updateById(id, { deletedAt: new Date() }, { updatedBy });
   }
 
   async restoreById(id, updatedBy = null) {
-    const user = await this.model
-      .findById(id)
-      .setOptions({ includeDeleted: true })
-      .exec();
-    if (!user) {
-      return null;
-    }
-    return user.restore(updatedBy);
+    return this.updateById(id, { deletedAt: null }, { updatedBy });
   }
 
   async emailExists(email, excludeId = null) {
-    const filter = { email: email.toLowerCase().trim() };
-    if (excludeId) {
-      filter._id = { $ne: excludeId };
-    }
-    const count = await this.model.countDocuments(filter);
+    const count = await this.db.user.count({
+      where: {
+        email: email.toLowerCase().trim(),
+        deletedAt: null,
+        ...(excludeId ? { id: { not: excludeId } } : {})
+      }
+    });
     return count > 0;
   }
 

@@ -1,5 +1,5 @@
-import { Order } from '../orders/order.model.js';
-import { Product, PRODUCT_CATEGORIES } from '../products/product.model.js';
+import { prisma } from '../../database/prisma.js';
+import { PRODUCT_CATEGORIES } from '../../constants/product.js';
 import { ORDER_STATUS } from '../../constants/orderStatus.js';
 
 const PERIOD_DAYS = {
@@ -64,51 +64,68 @@ function resolveLimit(value, fallback = 5) {
   return Math.min(parsed, 20);
 }
 
-const activeOrderMatch = (fromDate, toDate) => ({
-  status: { $ne: ORDER_STATUS.CANCELLED },
-  deletedAt: null,
-  createdAt: { $gte: fromDate, $lte: toDate }
-});
+const toNumber = (value) => Number(value ?? 0);
 
 const aggregatePeriod = async (fromDate, toDate) => {
-  const [result] = await Order.aggregate([
-    { $match: activeOrderMatch(fromDate, toDate) },
-    {
-      $group: {
-        _id: null,
-        revenue: { $sum: '$total' },
-        orders: { $sum: 1 },
-        delivered: {
-          $sum: {
-            $cond: [{ $in: ['$status', [ORDER_STATUS.DELIVERED, ORDER_STATUS.SHIPPED]] }, 1, 0]
-          }
-        }
-      }
-    }
-  ]);
+  const [result] = await prisma.$queryRaw`
+    SELECT
+      COALESCE(SUM(total), 0) AS revenue,
+      COUNT(*)::int AS orders,
+      COUNT(*) FILTER (
+        WHERE status::text IN (${ORDER_STATUS.DELIVERED}, ${ORDER_STATUS.SHIPPED})
+      )::int AS delivered
+    FROM orders
+    WHERE status::text <> ${ORDER_STATUS.CANCELLED}
+      AND "deletedAt" IS NULL
+      AND "createdAt" >= ${fromDate}
+      AND "createdAt" <= ${toDate}
+  `;
 
   return {
-    revenue: result?.revenue ?? 0,
-    orders: result?.orders ?? 0,
-    delivered: result?.delivered ?? 0
+    revenue: toNumber(result?.revenue),
+    orders: toNumber(result?.orders),
+    delivered: toNumber(result?.delivered)
   };
 };
 
 const buildDailySeries = async (fromDate, toDate, field) => {
-  const groupField = field === 'revenue' ? '$total' : 1;
+  const buckets =
+    field === 'revenue'
+      ? await prisma.$queryRaw`
+          SELECT
+            date_trunc('day', "createdAt")::date AS day,
+            COALESCE(SUM(total), 0) AS value
+          FROM orders
+          WHERE status::text <> ${ORDER_STATUS.CANCELLED}
+            AND "deletedAt" IS NULL
+            AND "createdAt" >= ${fromDate}
+            AND "createdAt" <= ${toDate}
+          GROUP BY 1
+          ORDER BY 1
+        `
+      : await prisma.$queryRaw`
+          SELECT
+            date_trunc('day', "createdAt")::date AS day,
+            COUNT(*)::int AS value
+          FROM orders
+          WHERE status::text <> ${ORDER_STATUS.CANCELLED}
+            AND "deletedAt" IS NULL
+            AND "createdAt" >= ${fromDate}
+            AND "createdAt" <= ${toDate}
+          GROUP BY 1
+          ORDER BY 1
+        `;
 
-  const buckets = await Order.aggregate([
-    { $match: activeOrderMatch(fromDate, toDate) },
-    {
-      $group: {
-        _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
-        value: { $sum: groupField }
-      }
-    },
-    { $sort: { _id: 1 } }
-  ]);
+  const lookup = new Map(
+    buckets.map((bucket) => {
+      const key =
+        bucket.day instanceof Date
+          ? bucket.day.toISOString().slice(0, 10)
+          : String(bucket.day).slice(0, 10);
+      return [key, toNumber(bucket.value)];
+    })
+  );
 
-  const lookup = new Map(buckets.map((bucket) => [bucket._id, bucket.value]));
   const labels = [];
   const series = [];
   const cursor = new Date(fromDate);
@@ -186,19 +203,22 @@ const buildSparklineSeries = async (fromDate, toDate, field) => {
 const aggregateTopProducts = async (fromDate, toDate, limit) => {
   const safeLimit = resolveLimit(limit);
 
-  return Order.aggregate([
-    { $match: activeOrderMatch(fromDate, toDate) },
-    { $unwind: '$items' },
-    {
-      $group: {
-        _id: '$items.productId',
-        name: { $first: '$items.name' },
-        revenue: { $sum: { $multiply: ['$items.price', '$items.quantity'] } },
-        orders: { $sum: '$items.quantity' }
-      }
-    },
-    { $sort: { revenue: -1 } }
-  ]).limit(safeLimit);
+  return prisma.$queryRaw`
+    SELECT
+      oi."productId" AS id,
+      oi.name AS name,
+      COALESCE(SUM(oi.price * oi.quantity), 0) AS revenue,
+      COALESCE(SUM(oi.quantity), 0)::int AS orders
+    FROM order_items oi
+    INNER JOIN orders o ON o.id = oi."orderId"
+    WHERE o.status::text <> ${ORDER_STATUS.CANCELLED}
+      AND o."deletedAt" IS NULL
+      AND o."createdAt" >= ${fromDate}
+      AND o."createdAt" <= ${toDate}
+    GROUP BY oi."productId", oi.name
+    ORDER BY revenue DESC
+    LIMIT ${safeLimit}
+  `;
 };
 
 const PERIOD_CHART_META = {
@@ -308,33 +328,27 @@ export class AnalyticsService {
   async getCategoryBreakdown(period = '30d') {
     const { fromDate, toDate } = getPeriodRange(period);
 
-    const breakdown = await Order.aggregate([
-      { $match: activeOrderMatch(fromDate, toDate) },
-      { $unwind: '$items' },
-      {
-        $lookup: {
-          from: 'products',
-          localField: 'items.productId',
-          foreignField: '_id',
-          as: 'product'
-        }
-      },
-      { $unwind: '$product' },
-      {
-        $group: {
-          _id: '$product.category',
-          revenue: { $sum: { $multiply: ['$items.price', '$items.quantity'] } }
-        }
-      },
-      { $sort: { revenue: -1 } }
-    ]);
+    const breakdown = await prisma.$queryRaw`
+      SELECT
+        p.category AS category,
+        COALESCE(SUM(oi.price * oi.quantity), 0) AS revenue
+      FROM order_items oi
+      INNER JOIN orders o ON o.id = oi."orderId"
+      INNER JOIN products p ON p.id = oi."productId"
+      WHERE o.status::text <> ${ORDER_STATUS.CANCELLED}
+        AND o."deletedAt" IS NULL
+        AND o."createdAt" >= ${fromDate}
+        AND o."createdAt" <= ${toDate}
+      GROUP BY p.category
+      ORDER BY revenue DESC
+    `;
 
-    const totalRevenue = breakdown.reduce((sum, item) => sum + item.revenue, 0) || 1;
+    const totalRevenue = breakdown.reduce((sum, item) => sum + toNumber(item.revenue), 0) || 1;
 
     return breakdown.map((item) => ({
-      label: CATEGORY_LABELS[item._id] || item._id,
-      value: Math.round((item.revenue / totalRevenue) * 100),
-      category: item._id
+      label: CATEGORY_LABELS[item.category] || item.category,
+      value: Math.round((toNumber(item.revenue) / totalRevenue) * 100),
+      category: item.category
     }));
   }
 
@@ -348,25 +362,26 @@ export class AnalyticsService {
     ]);
 
     const previousLookup = new Map(
-      previousProducts.map((product) => [String(product._id), product.revenue])
+      previousProducts.map((product) => [String(product.id), toNumber(product.revenue)])
     );
 
     return topProducts.map((product) => {
-      const previousRevenue = previousLookup.get(String(product._id)) ?? 0;
+      const previousRevenue = previousLookup.get(String(product.id)) ?? 0;
+      const revenue = toNumber(product.revenue);
 
       return {
-        id: product._id?.toString?.() ?? String(product._id ?? ''),
+        id: String(product.id ?? ''),
         name: product.name || 'Unknown product',
-        revenue: formatCurrency(product.revenue ?? 0),
-        orders: product.orders ?? 0,
-        change: formatChange(product.revenue ?? 0, previousRevenue),
-        trend: getTrend(product.revenue ?? 0, previousRevenue)
+        revenue: formatCurrency(revenue),
+        orders: toNumber(product.orders),
+        change: formatChange(revenue, previousRevenue),
+        trend: getTrend(revenue, previousRevenue)
       };
     });
   }
 
   async getProductCount() {
-    return Product.countDocuments({ deletedAt: null });
+    return prisma.product.count({ where: { deletedAt: null } });
   }
 
   async getCategoryOptions() {

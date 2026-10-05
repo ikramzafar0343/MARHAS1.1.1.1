@@ -34,11 +34,17 @@ export const paginationSchema = z.object({
   search: z.string().optional()
 });
 
-export const objectIdSchema = z.string().regex(/^[a-f\d]{24}$/i, 'Invalid ID');
+export const uuidSchema = z.string().uuid('Invalid ID');
 
-export const mongoIdParamSchema = z.object({
-  id: objectIdSchema
+export const uuidParamSchema = z.object({
+  id: uuidSchema
 });
+
+/** @deprecated use uuidSchema — kept for transitional imports */
+export const objectIdSchema = uuidSchema;
+
+/** @deprecated use uuidParamSchema — kept for transitional imports */
+export const mongoIdParamSchema = uuidParamSchema;
 
 export const orderNumberParamSchema = z.object({
   orderNumber: z.string().min(1)

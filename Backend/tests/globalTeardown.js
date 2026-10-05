@@ -1,5 +1,3 @@
 export default async function globalTeardown() {
-  if (global.__MONGO_SERVER__) {
-    await global.__MONGO_SERVER__.stop();
-  }
+  // Postgres test DB is external; nothing to stop.
 }

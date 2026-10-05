@@ -1,6 +1,7 @@
 import request from 'supertest';
 import { createApp } from '../src/app.js';
-import { User } from '../src/modules/users/user.model.js';
+import { hashPassword } from '../src/utils/password.js';
+import { userRepository } from '../src/modules/users/user.repository.js';
 import { ROLES } from '../src/constants/roles.js';
 
 describe('Auth API', () => {
@@ -21,8 +22,8 @@ describe('Auth API', () => {
   });
 
   it('logs in an existing customer', async () => {
-    const passwordHash = await User.hashPassword('TestPass123');
-    await User.create({
+    const passwordHash = await hashPassword('TestPass123');
+    await userRepository.create({
       name: 'Login User',
       email: 'login@marhas.com',
       passwordHash,

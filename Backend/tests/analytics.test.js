@@ -1,8 +1,10 @@
 import request from 'supertest';
 import { createApp } from '../src/app.js';
-import { Product, PRODUCT_STATUS } from '../src/modules/products/product.model.js';
-import { User } from '../src/modules/users/user.model.js';
-import { Order } from '../src/modules/orders/order.model.js';
+import { hashPassword } from '../src/utils/password.js';
+import { productRepository } from '../src/modules/products/product.repository.js';
+import { userRepository } from '../src/modules/users/user.repository.js';
+import { orderRepository } from '../src/modules/orders/order.repository.js';
+import { PRODUCT_STATUS } from '../src/constants/product.js';
 import { ORDER_STATUS, PAYMENT_METHODS } from '../src/constants/orderStatus.js';
 import { ROLES } from '../src/constants/roles.js';
 
@@ -11,8 +13,8 @@ describe('Analytics API', () => {
   let adminToken;
 
   beforeEach(async () => {
-    const passwordHash = await User.hashPassword('AdminPass123');
-    const admin = await User.create({
+    const passwordHash = await hashPassword('AdminPass123');
+    const admin = await userRepository.create({
       name: 'Analytics Admin',
       email: 'analytics-admin@marhas.com',
       passwordHash,
@@ -25,7 +27,7 @@ describe('Analytics API', () => {
 
     adminToken = login.body.data.accessToken;
 
-    const product = await Product.create({
+    const product = await productRepository.create({
       title: 'Embroidered Silk Ensemble',
       slug: 'embroidered-silk-ensemble',
       sku: 'M.0101',
@@ -41,32 +43,35 @@ describe('Analytics API', () => {
     });
 
     const createdAt = new Date();
-    await Order.create({
-      orderNumber: '#MH-TEST-001',
-      customer: 'Test Customer',
-      email: 'customer@marhas.com',
-      phone: '+92 300 1112233',
-      shipping: { address: '12 Mall Road', city: 'Lahore', postalCode: '54000' },
-      paymentMethod: PAYMENT_METHODS.COD,
-      status: ORDER_STATUS.DELIVERED,
-      items: [
-        {
-          productId: product._id,
-          name: product.title,
-          sku: product.sku,
-          quantity: 2,
-          price: product.price,
-          color: 'Ivory'
-        }
-      ],
-      subtotal: 30000,
-      shippingFee: 0,
-      total: 30000,
-      createdBy: admin._id,
-      updatedBy: admin._id,
-      createdAt,
-      updatedAt: createdAt
-    });
+    await orderRepository.create(
+      {
+        orderNumber: '#MH-TEST-001',
+        customer: 'Test Customer',
+        email: 'customer@marhas.com',
+        phone: '+92 300 1112233',
+        shipping: { address: '12 Mall Road', city: 'Lahore', postalCode: '54000' },
+        paymentMethod: PAYMENT_METHODS.COD,
+        status: ORDER_STATUS.DELIVERED,
+        items: [
+          {
+            productId: product.id,
+            name: product.title,
+            sku: product.sku,
+            quantity: 2,
+            price: product.price,
+            color: 'Ivory'
+          }
+        ],
+        subtotal: 30000,
+        shippingFee: 0,
+        taxAmount: 0,
+        taxRate: 0,
+        total: 30000,
+        createdAt,
+        updatedAt: createdAt
+      },
+      { updatedBy: admin.id }
+    );
   });
 
   it('returns top products for the selected period', async () => {

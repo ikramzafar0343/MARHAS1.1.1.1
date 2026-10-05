@@ -1,44 +1,53 @@
-import { RestockEvent } from './restock.model.js';
+import { Prisma } from '@prisma/client';
+import { prisma } from '../../database/prisma.js';
+import { toEntity, normalizeProduct } from '../../database/mapper.js';
+
+const mapEvent = (row) => {
+  if (!row) return null;
+  const entity = toEntity(row);
+  if (row.product) {
+    entity.productId = normalizeProduct(row.product);
+  }
+  return entity;
+};
+
+const toOrderBy = (sort = { createdAt: -1 }) =>
+  Object.entries(sort).map(([key, value]) => ({
+    [key]: value === 1 || value === 'asc' ? 'asc' : 'desc'
+  }));
 
 export class RestockRepository {
-  constructor(model = RestockEvent) {
-    this.model = model;
+  constructor(client = prisma) {
+    this.db = client;
   }
 
   async create(data) {
-    const event = new this.model(data);
-    return event.save();
+    const event = await this.db.restockEvent.create({
+      data: {
+        ...data,
+        sku: data.sku?.toUpperCase?.() ?? data.sku
+      }
+    });
+    return mapEvent(event);
   }
 
   async findById(id, options = {}) {
-    let query = this.model.findById(id);
-
-    if (options.populateProduct) {
-      query = query.populate('productId', 'title sku category stock images');
-    }
-    if (options.lean) {
-      query = query.lean();
-    }
-
-    return query.exec();
+    const event = await this.db.restockEvent.findUnique({
+      where: { id },
+      include: options.populateProduct ? { product: true } : undefined
+    });
+    return mapEvent(event);
   }
 
   async findByProduct(productId, options = {}) {
     const safeLimit = Math.min(Math.max(1, options.limit || 20), 100);
-
-    let query = this.model
-      .find({ productId })
-      .sort({ createdAt: -1 })
-      .limit(safeLimit);
-
-    if (options.populateProduct) {
-      query = query.populate('productId', 'title sku category stock');
-    }
-    if (options.lean) {
-      query = query.lean();
-    }
-
-    return query.exec();
+    const events = await this.db.restockEvent.findMany({
+      where: { productId },
+      orderBy: { createdAt: 'desc' },
+      take: safeLimit,
+      include: options.populateProduct ? { product: true } : undefined
+    });
+    return events.map(mapEvent);
   }
 
   async findPaginated({
@@ -52,19 +61,19 @@ export class RestockRepository {
     const safeLimit = Math.min(Math.max(1, limit), 100);
     const skip = (safePage - 1) * safeLimit;
 
-    let query = this.model.find(filter).sort(sort).skip(skip).limit(safeLimit);
-
-    if (populateProduct) {
-      query = query.populate('productId', 'title sku category stock images');
-    }
-
     const [docs, total] = await Promise.all([
-      query.lean().exec(),
-      this.model.countDocuments(filter)
+      this.db.restockEvent.findMany({
+        where: filter,
+        orderBy: toOrderBy(sort),
+        skip,
+        take: safeLimit,
+        include: populateProduct ? { product: true } : undefined
+      }),
+      this.db.restockEvent.count({ where: filter })
     ]);
 
     return {
-      docs,
+      docs: docs.map(mapEvent),
       pagination: {
         page: safePage,
         limit: safeLimit,
@@ -77,43 +86,37 @@ export class RestockRepository {
   }
 
   async findRecent(limit = 10) {
-    return this.model
-      .find({})
-      .sort({ createdAt: -1 })
-      .limit(Math.min(limit, 50))
-      .populate('productId', 'title sku')
-      .lean()
-      .exec();
+    const events = await this.db.restockEvent.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: Math.min(limit, 50),
+      include: { product: true }
+    });
+    return events.map(mapEvent);
   }
 
   async countByProduct(productId) {
-    return this.model.countDocuments({ productId });
+    return this.db.restockEvent.count({ where: { productId } });
   }
 
   async aggregateByProduct({ fromDate, toDate } = {}) {
-    const match = {};
+    const rows = await this.db.$queryRaw`
+      SELECT
+        "productId" AS id,
+        SUM(quantity)::int AS "totalRestocked",
+        COUNT(*)::int AS events
+      FROM restock_events
+      WHERE 1=1
+        ${fromDate ? Prisma.sql`AND "createdAt" >= ${new Date(fromDate)}` : Prisma.empty}
+        ${toDate ? Prisma.sql`AND "createdAt" <= ${new Date(toDate)}` : Prisma.empty}
+      GROUP BY "productId"
+      ORDER BY "totalRestocked" DESC
+    `;
 
-    if (fromDate || toDate) {
-      match.createdAt = {};
-      if (fromDate) {
-        match.createdAt.$gte = new Date(fromDate);
-      }
-      if (toDate) {
-        match.createdAt.$lte = new Date(toDate);
-      }
-    }
-
-    return this.model.aggregate([
-      ...(Object.keys(match).length ? [{ $match: match }] : []),
-      {
-        $group: {
-          _id: '$productId',
-          totalRestocked: { $sum: '$quantity' },
-          events: { $sum: 1 }
-        }
-      },
-      { $sort: { totalRestocked: -1 } }
-    ]);
+    return rows.map((row) => ({
+      _id: row.id,
+      totalRestocked: row.totalRestocked,
+      events: row.events
+    }));
   }
 }
 

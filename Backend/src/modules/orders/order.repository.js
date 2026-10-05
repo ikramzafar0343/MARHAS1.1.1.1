@@ -1,4 +1,6 @@
-import { Order } from './order.model.js';
+import { Prisma } from '@prisma/client';
+import { prisma } from '../../database/prisma.js';
+import { normalizeOrder, softDeleteFilter } from '../../database/mapper.js';
 import { ORDER_STATUS } from '../../constants/orderStatus.js';
 import { AppError } from '../../utils/AppError.js';
 
@@ -13,17 +15,26 @@ const buildPagination = (page, limit, total) => ({
 
 const formatOrderNumber = (sequence) => `#MH-${String(sequence).padStart(5, '0')}`;
 
+const itemInclude = {
+  items: { include: { product: true } },
+  user: true
+};
+
+const toOrderBy = (sort = { createdAt: -1 }) =>
+  Object.entries(sort).map(([key, value]) => ({
+    [key]: value === 1 || value === 'asc' ? 'asc' : 'desc'
+  }));
+
 export class OrderRepository {
-  constructor(model = Order) {
-    this.model = model;
+  constructor(client = prisma) {
+    this.db = client;
   }
 
-  async generateOrderNumber() {
-    const latest = await this.model
-      .findOne({}, { orderNumber: 1 })
-      .sort({ createdAt: -1 })
-      .setOptions({ includeDeleted: true })
-      .lean();
+  async generateOrderNumber(tx = this.db) {
+    const latest = await tx.order.findFirst({
+      orderBy: { createdAt: 'desc' },
+      select: { orderNumber: true }
+    });
 
     if (!latest?.orderNumber) {
       return formatOrderNumber(1);
@@ -35,114 +46,139 @@ export class OrderRepository {
   }
 
   async create(data, options = {}) {
-    const payload = { ...data };
+    const { items = [], ...orderData } = data;
+    const orderNumber = orderData.orderNumber || (await this.generateOrderNumber());
 
-    if (!payload.orderNumber) {
-      payload.orderNumber = await this.generateOrderNumber();
-    }
+    const created = await this.db.order.create({
+      data: {
+        ...orderData,
+        orderNumber,
+        updatedBy: options.updatedBy ?? orderData.updatedBy ?? null,
+        createdBy: options.updatedBy ?? orderData.createdBy ?? null,
+        items: {
+          create: items.map((item) => ({
+            productId: item.productId?.id ?? item.productId?._id ?? item.productId,
+            name: item.name,
+            sku: item.sku,
+            quantity: item.quantity,
+            size: item.size ?? null,
+            color: item.color ?? null,
+            colorHex: item.colorHex ?? null,
+            price: item.price,
+            imageUrl: item.imageUrl ?? null
+          }))
+        }
+      },
+      include: itemInclude
+    });
 
-    if (options.updatedBy) {
-      payload.updatedBy = options.updatedBy;
-    }
+    return normalizeOrder(created);
+  }
 
-    const order = new this.model(payload);
-    return order.save();
+  async createInTransaction(tx, data, options = {}) {
+    const { items = [], ...orderData } = data;
+    const orderNumber = orderData.orderNumber || (await this.generateOrderNumber(tx));
+
+    const created = await tx.order.create({
+      data: {
+        ...orderData,
+        orderNumber,
+        updatedBy: options.updatedBy ?? null,
+        createdBy: options.updatedBy ?? null,
+        items: {
+          create: items.map((item) => ({
+            productId: item.productId?.id ?? item.productId?._id ?? item.productId,
+            name: item.name,
+            sku: item.sku,
+            quantity: item.quantity,
+            size: item.size ?? null,
+            color: item.color ?? null,
+            colorHex: item.colorHex ?? null,
+            price: item.price,
+            imageUrl: item.imageUrl ?? null
+          }))
+        }
+      },
+      include: itemInclude
+    });
+
+    return normalizeOrder(created);
   }
 
   async findById(id, options = {}) {
-    let query = this.model.findById(id);
-
-    if (options.populateItems) {
-      query = query.populate('items.productId', 'title slug images sku');
-    }
-    if (options.populateUser) {
-      query = query.populate('userId', 'name email');
-    }
-    if (options.includeDeleted) {
-      query = query.setOptions({ includeDeleted: true });
-    }
-    if (options.lean) {
-      query = query.lean();
-    }
-
-    return query.exec();
+    const order = await this.db.order.findFirst({
+      where: { id, ...softDeleteFilter(options.includeDeleted) },
+      include: {
+        items: options.populateItems ? { include: { product: true } } : true,
+        user: options.populateUser ? true : false
+      }
+    });
+    return normalizeOrder(order);
   }
 
   async findByOrderNumber(orderNumber, options = {}) {
-    let query = this.model.findOne({
-      orderNumber: orderNumber.toUpperCase().trim()
+    const order = await this.db.order.findFirst({
+      where: {
+        orderNumber: orderNumber.toUpperCase().trim(),
+        ...softDeleteFilter(options.includeDeleted)
+      },
+      include: {
+        items: options.populateItems ? { include: { product: true } } : true,
+        user: options.populateUser ? true : false
+      }
     });
-
-    if (options.populateItems) {
-      query = query.populate('items.productId', 'title slug images sku');
-    }
-    if (options.populateUser) {
-      query = query.populate('userId', 'name email');
-    }
-    if (options.includeDeleted) {
-      query = query.setOptions({ includeDeleted: true });
-    }
-    if (options.lean) {
-      query = query.lean();
-    }
-
-    return query.exec();
+    return normalizeOrder(order);
   }
 
   buildFilter({ status, userId, email, search, fromDate, toDate } = {}) {
-    const filter = {};
+    const where = { deletedAt: null };
 
-    if (status && status !== 'all') {
-      filter.status = status;
-    }
-
-    if (userId) {
-      filter.userId = userId;
-    }
-
-    if (email) {
-      filter.email = email.toLowerCase().trim();
-    }
+    if (status && status !== 'all') where.status = status;
+    if (userId) where.userId = userId;
+    if (email) where.email = email.toLowerCase().trim();
 
     if (search) {
-      const regex = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-      filter.$or = [{ orderNumber: regex }, { customer: regex }, { email: regex }, { phone: regex }];
+      where.OR = [
+        { orderNumber: { contains: search, mode: 'insensitive' } },
+        { customer: { contains: search, mode: 'insensitive' } },
+        { email: { contains: search, mode: 'insensitive' } },
+        { phone: { contains: search, mode: 'insensitive' } }
+      ];
     }
 
     if (fromDate || toDate) {
-      filter.createdAt = {};
-      if (fromDate) {
-        filter.createdAt.$gte = new Date(fromDate);
-      }
-      if (toDate) {
-        filter.createdAt.$lte = new Date(toDate);
-      }
+      where.createdAt = {};
+      if (fromDate) where.createdAt.gte = new Date(fromDate);
+      if (toDate) where.createdAt.lte = new Date(toDate);
     }
 
-    return filter;
+    return where;
   }
 
   async findPaginated({
     page = 1,
     limit = 20,
     filter = {},
-    sort = { createdAt: -1 },
-    lean = true
+    sort = { createdAt: -1 }
   } = {}) {
     const safePage = Math.max(1, page);
     const safeLimit = Math.min(Math.max(1, limit), 100);
     const skip = (safePage - 1) * safeLimit;
+    const where = { deletedAt: null, ...filter };
 
-    let query = this.model.find(filter).sort(sort).skip(skip).limit(safeLimit);
-
-    if (lean) {
-      query = query.lean();
-    }
-
-    const [docs, total] = await Promise.all([query.exec(), this.model.countDocuments(filter)]);
+    const [docs, total] = await Promise.all([
+      this.db.order.findMany({
+        where,
+        orderBy: toOrderBy(sort),
+        skip,
+        take: safeLimit,
+        include: { items: true }
+      }),
+      this.db.order.count({ where })
+    ]);
 
     return {
-      docs,
+      docs: docs.map(normalizeOrder),
       pagination: buildPagination(safePage, safeLimit, total)
     };
   }
@@ -158,48 +194,45 @@ export class OrderRepository {
   }
 
   async findRecent(limit = 10) {
-    return this.model.find({}).sort({ createdAt: -1 }).limit(limit).lean().exec();
+    const docs = await this.db.order.findMany({
+      where: { deletedAt: null },
+      orderBy: { createdAt: 'desc' },
+      take: Math.min(limit, 50),
+      include: { items: true }
+    });
+    return docs.map(normalizeOrder);
   }
 
   async updateById(id, data, options = {}) {
     const update = { ...data };
-    if (options.updatedBy) {
-      update.updatedBy = options.updatedBy;
-    }
+    if (options.updatedBy) update.updatedBy = options.updatedBy;
+    delete update.items;
 
-    return this.model
-      .findByIdAndUpdate(id, update, { returnDocument: 'after', runValidators: true })
-      .exec();
+    try {
+      const order = await this.db.order.update({
+        where: { id },
+        data: update,
+        include: itemInclude
+      });
+      return normalizeOrder(order);
+    } catch {
+      return null;
+    }
   }
 
   async updateStatus(id, status, options = {}) {
     const update = { status };
-
     if (status === ORDER_STATUS.CANCELLED) {
       update.cancelledAt = new Date();
       if (options.cancellationReason) {
         update.cancellationReason = options.cancellationReason;
       }
     }
-
-    if (options.updatedBy) {
-      update.updatedBy = options.updatedBy;
-    }
-
-    return this.model
-      .findByIdAndUpdate(id, update, { returnDocument: 'after', runValidators: true })
-      .exec();
+    return this.updateById(id, update, options);
   }
 
   async updateShipping(id, shipping, updatedBy = null) {
-    const update = { shipping };
-    if (updatedBy) {
-      update.updatedBy = updatedBy;
-    }
-
-    return this.model
-      .findByIdAndUpdate(id, update, { returnDocument: 'after', runValidators: true })
-      .exec();
+    return this.updateById(id, { shipping }, { updatedBy });
   }
 
   async cancel(id, reason = null, updatedBy = null) {
@@ -210,68 +243,55 @@ export class OrderRepository {
   }
 
   async softDeleteById(id, updatedBy = null) {
-    const order = await this.findById(id);
-    if (!order) {
-      return null;
-    }
-    return order.softDelete(updatedBy);
+    return this.updateById(id, { deletedAt: new Date() }, { updatedBy });
   }
 
   async assertExists(id) {
     const order = await this.findById(id);
-    if (!order) {
-      throw new AppError('Order not found', 404);
-    }
+    if (!order) throw new AppError('Order not found', 404);
     return order;
   }
 
   async assertByOrderNumber(orderNumber) {
     const order = await this.findByOrderNumber(orderNumber);
-    if (!order) {
-      throw new AppError('Order not found', 404);
-    }
+    if (!order) throw new AppError('Order not found', 404);
     return order;
   }
 
   async aggregateRevenue({ fromDate, toDate, groupBy = 'day' } = {}) {
-    const match = {
-      status: { $ne: ORDER_STATUS.CANCELLED },
-      deletedAt: null
-    };
+    const trunc = groupBy === 'month' ? 'month' : 'day';
+    const rows = await this.db.$queryRaw`
+      SELECT
+        to_char(date_trunc(${trunc}, "createdAt"), ${groupBy === 'month' ? 'YYYY-MM' : 'YYYY-MM-DD'}) AS period,
+        COALESCE(SUM(total), 0)::float AS revenue,
+        COUNT(*)::int AS orders
+      FROM orders
+      WHERE "deletedAt" IS NULL
+        AND status <> 'cancelled'::"OrderStatus"
+        ${fromDate ? Prisma.sql`AND "createdAt" >= ${new Date(fromDate)}` : Prisma.empty}
+        ${toDate ? Prisma.sql`AND "createdAt" <= ${new Date(toDate)}` : Prisma.empty}
+      GROUP BY 1
+      ORDER BY 1 ASC
+    `;
 
-    if (fromDate || toDate) {
-      match.createdAt = {};
-      if (fromDate) {
-        match.createdAt.$gte = new Date(fromDate);
-      }
-      if (toDate) {
-        match.createdAt.$lte = new Date(toDate);
-      }
-    }
-
-    const dateFormat =
-      groupBy === 'month'
-        ? { $dateToString: { format: '%Y-%m', date: '$createdAt' } }
-        : { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } };
-
-    return this.model.aggregate([
-      { $match: match },
-      {
-        $group: {
-          _id: dateFormat,
-          revenue: { $sum: '$total' },
-          orders: { $sum: 1 }
-        }
-      },
-      { $sort: { _id: 1 } }
-    ]);
+    return rows.map((row) => ({
+      _id: row.period,
+      revenue: Number(row.revenue),
+      orders: row.orders
+    }));
   }
 
   async countByStatus() {
-    return this.model.aggregate([
-      { $match: { deletedAt: null } },
-      { $group: { _id: '$status', count: { $sum: 1 } } }
-    ]);
+    const rows = await this.db.order.groupBy({
+      by: ['status'],
+      where: { deletedAt: null },
+      _count: { _all: true }
+    });
+
+    return rows.map((row) => ({
+      _id: row.status,
+      count: row._count._all
+    }));
   }
 }
 

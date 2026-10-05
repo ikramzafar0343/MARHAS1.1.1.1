@@ -1,178 +1,131 @@
-import { StorefrontContent } from './storefront.model.js';
+import { prisma } from '../../database/prisma.js';
+import { toEntity, softDeleteFilter } from '../../database/mapper.js';
 import { AppError } from '../../utils/AppError.js';
 
+const mapStorefront = (row) => {
+  if (!row) return null;
+  return toEntity(row);
+};
+
 export class StorefrontRepository {
-  constructor(model = StorefrontContent) {
-    this.model = model;
+  constructor(client = prisma) {
+    this.db = client;
   }
 
   normalizeCollectionHeroes(data) {
-    if (!data?.collectionHeroes) {
-      return data;
-    }
-
+    if (!data?.collectionHeroes) return data;
     const heroes = data.collectionHeroes;
-
     if (heroes instanceof Map) {
-      return {
-        ...data,
-        collectionHeroes: Object.fromEntries(heroes)
-      };
+      return { ...data, collectionHeroes: Object.fromEntries(heroes) };
     }
-
-    return {
-      ...data,
-      collectionHeroes: { ...heroes }
-    };
+    return { ...data, collectionHeroes: { ...heroes } };
   }
 
   async create(data, options = {}) {
     const payload = this.normalizeCollectionHeroes({ ...data });
-
     if (options.updatedBy) {
       payload.updatedBy = options.updatedBy;
+      payload.createdBy = options.updatedBy;
     }
-
-    const doc = new this.model(payload);
-    return doc.save();
+    const doc = await this.db.storefrontContent.create({ data: payload });
+    return mapStorefront(doc);
   }
 
   async findByKey(key = 'default', options = {}) {
-    let query = this.model.findOne({ key: key.toLowerCase().trim() });
-
-    if (options.includeDeleted) {
-      query = query.setOptions({ includeDeleted: true });
-    }
-    if (options.lean) {
-      query = query.lean();
-    }
-
-    return query.exec();
+    const doc = await this.db.storefrontContent.findFirst({
+      where: {
+        key: key.toLowerCase().trim(),
+        ...softDeleteFilter(options.includeDeleted)
+      }
+    });
+    return mapStorefront(doc);
   }
 
   async findPublished(key = 'default') {
-    return this.model
-      .findOne({
+    const doc = await this.db.storefrontContent.findFirst({
+      where: {
         key: key.toLowerCase().trim(),
-        isPublished: true
-      })
-      .lean()
-      .exec();
+        isPublished: true,
+        deletedAt: null
+      }
+    });
+    return mapStorefront(doc);
   }
 
   async findById(id, options = {}) {
-    let query = this.model.findById(id);
-
-    if (options.includeDeleted) {
-      query = query.setOptions({ includeDeleted: true });
-    }
-
-    return query.exec();
+    const doc = await this.db.storefrontContent.findFirst({
+      where: { id, ...softDeleteFilter(options.includeDeleted) }
+    });
+    return mapStorefront(doc);
   }
 
   async upsertByKey(key, data, options = {}) {
     const normalizedKey = key.toLowerCase().trim();
     const payload = this.normalizeCollectionHeroes({ ...data, key: normalizedKey });
+    if (options.updatedBy) payload.updatedBy = options.updatedBy;
+    if (payload.isPublished) payload.publishedAt = new Date();
 
-    if (options.updatedBy) {
-      payload.updatedBy = options.updatedBy;
+    const existing = await this.findByKey(normalizedKey, { includeDeleted: true });
+    if (existing) {
+      const updated = await this.db.storefrontContent.update({
+        where: { id: existing.id },
+        data: { ...payload, deletedAt: null }
+      });
+      return mapStorefront(updated);
     }
 
-    if (payload.isPublished) {
-      payload.publishedAt = new Date();
-    }
-
-    return this.model
-      .findOneAndUpdate({ key: normalizedKey }, payload, {
-        returnDocument: 'after',
-        upsert: true,
-        runValidators: true,
-        setDefaultsOnInsert: true,
-        lean: true
-      })
-      .exec();
+    const created = await this.db.storefrontContent.create({
+      data: {
+        ...payload,
+        createdBy: options.updatedBy ?? null
+      }
+    });
+    return mapStorefront(created);
   }
 
   async updateByKey(key, data, options = {}) {
     const payload = this.normalizeCollectionHeroes({ ...data });
+    if (options.updatedBy) payload.updatedBy = options.updatedBy;
+    if (payload.isPublished === true) payload.publishedAt = new Date();
 
-    if (options.updatedBy) {
-      payload.updatedBy = options.updatedBy;
-    }
+    const existing = await this.findByKey(key);
+    if (!existing) return null;
 
-    if (payload.isPublished === true) {
-      payload.publishedAt = new Date();
-    }
-
-    return this.model
-      .findOneAndUpdate({ key: key.toLowerCase().trim() }, payload, {
-        returnDocument: 'after',
-        runValidators: true
-      })
-      .exec();
+    const updated = await this.db.storefrontContent.update({
+      where: { id: existing.id },
+      data: payload
+    });
+    return mapStorefront(updated);
   }
 
   async publish(key = 'default', updatedBy = null) {
-    const update = { isPublished: true, publishedAt: new Date() };
-    if (updatedBy) {
-      update.updatedBy = updatedBy;
-    }
-
-    return this.model
-      .findOneAndUpdate({ key: key.toLowerCase().trim() }, update, {
-        returnDocument: 'after',
-        runValidators: true
-      })
-      .exec();
+    return this.updateByKey(key, { isPublished: true, publishedAt: new Date() }, { updatedBy });
   }
 
   async unpublish(key = 'default', updatedBy = null) {
-    const update = { isPublished: false };
-    if (updatedBy) {
-      update.updatedBy = updatedBy;
-    }
-
-    return this.model
-      .findOneAndUpdate({ key: key.toLowerCase().trim() }, update, {
-        returnDocument: 'after',
-        runValidators: true
-      })
-      .exec();
+    return this.updateByKey(key, { isPublished: false }, { updatedBy });
   }
 
-  async resetToDefaults(defaults, options = {}) {
-    const key = (options.key || 'default').toLowerCase().trim();
-    const payload = this.normalizeCollectionHeroes({
-      ...defaults,
+  async resetToDefaults(defaults, { key = 'default', isPublished = true, updatedBy = null } = {}) {
+    return this.upsertByKey(
       key,
-      isPublished: options.isPublished ?? false,
-      updatedBy: options.updatedBy ?? null
-    });
-
-    return this.model
-      .findOneAndUpdate({ key }, payload, {
-        returnDocument: 'after',
-        upsert: true,
-        runValidators: true,
-        setDefaultsOnInsert: true,
-        lean: true
-      })
-      .exec();
+      {
+        ...defaults,
+        key,
+        isPublished,
+        publishedAt: isPublished ? new Date() : null
+      },
+      { updatedBy }
+    );
   }
 
   async softDeleteByKey(key, updatedBy = null) {
-    const doc = await this.findByKey(key);
-    if (!doc) {
-      return null;
-    }
-    return doc.softDelete(updatedBy);
+    return this.updateByKey(key, { deletedAt: new Date() }, { updatedBy });
   }
 
-  async assertByKey(key) {
+  async assertByKey(key = 'default') {
     const doc = await this.findByKey(key);
-    if (!doc) {
-      throw new AppError('Storefront content not found', 404);
-    }
+    if (!doc) throw new AppError('Storefront content not found', 404);
     return doc;
   }
 }

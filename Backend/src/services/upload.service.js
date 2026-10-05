@@ -5,7 +5,7 @@ import multer from 'multer';
 import { env } from '../config/env.js';
 import { AppError } from '../utils/AppError.js';
 import { logger } from '../utils/logger.js';
-import { STORAGE_PROVIDERS } from '../modules/media/media.model.js';
+import { STORAGE_PROVIDERS } from '../constants/storage.js';
 
 const IMAGE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif'];
 const VIDEO_MIME_TYPES = ['video/mp4', 'video/webm', 'video/quicktime'];

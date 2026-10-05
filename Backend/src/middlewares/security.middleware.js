@@ -3,7 +3,6 @@ import helmet from 'helmet';
 import cors from 'cors';
 import compression from 'compression';
 import cookieParser from 'cookie-parser';
-import { mongoSanitizeMiddleware } from './mongoSanitize.middleware.js';
 import { xssSanitize } from './xss.middleware.js';
 import rateLimit from 'express-rate-limit';
 import { corsOrigins, env } from '../config/env.js';
@@ -54,7 +53,6 @@ export const applySecurityMiddleware = (app) => {
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ extended: true, limit: '10mb' }));
   app.use(cookieParser());
-  app.use(mongoSanitizeMiddleware());
   app.use(xssSanitize());
 
   // Skip global rate limiting in local development (React StrictMode + hot reload burst easily hit 100/15min)

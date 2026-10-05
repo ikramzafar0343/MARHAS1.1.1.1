@@ -1,5 +1,5 @@
 import { ProductRepository } from './product.repository.js';
-import { DISCOUNT_TYPES, PRODUCT_STATUS } from './product.model.js';
+import { DISCOUNT_TYPES, PRODUCT_STATUS } from '../../constants/product.js';
 import { AppError } from '../../utils/AppError.js';
 import { uploadService } from '../../services/upload.service.js';
 import { normalizeCategoryFilter, toFrontendCategory } from '../../constants/categoryMap.js';

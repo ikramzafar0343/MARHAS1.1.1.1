@@ -1,5 +1,5 @@
-import { Order } from '../orders/order.model.js';
-import { Product, PRODUCT_STATUS } from '../products/product.model.js';
+import { prisma } from '../../database/prisma.js';
+import { PRODUCT_STATUS } from '../../constants/product.js';
 import { orderRepository } from '../orders/order.repository.js';
 import { ORDER_STATUS } from '../../constants/orderStatus.js';
 
@@ -24,6 +24,8 @@ const formatChange = (current, previous) => {
 
 const getTrend = (current, previous) => (current >= previous ? 'up' : 'down');
 
+const toNumber = (value) => Number(value ?? 0);
+
 const fillMonthlyKeys = (months = 10) => {
   const keys = [];
   const now = new Date();
@@ -41,30 +43,36 @@ const mapMonthlyBuckets = (buckets, months = 10) => {
   return fillMonthlyKeys(months).map((key) => lookup.get(key) ?? 0);
 };
 
+const sumOrderTotal = async (where) => {
+  const result = await prisma.order.aggregate({
+    where,
+    _sum: { total: true }
+  });
+  return toNumber(result._sum.total);
+};
+
 const buildSalesSparkline = async (months = 10) => {
   const fromDate = new Date();
   fromDate.setMonth(fromDate.getMonth() - (months - 1));
   fromDate.setDate(1);
 
-  const buckets = await Order.aggregate([
-    {
-      $match: {
-        status: { $ne: ORDER_STATUS.CANCELLED },
-        deletedAt: null,
-        createdAt: { $gte: fromDate }
-      }
-    },
-    {
-      $group: {
-        _id: { $dateToString: { format: '%Y-%m', date: '$createdAt' } },
-        value: { $sum: '$total' }
-      }
-    },
-    { $sort: { _id: 1 } }
-  ]);
+  const buckets = await prisma.$queryRaw`
+    SELECT
+      to_char(date_trunc('month', "createdAt"), 'YYYY-MM') AS month,
+      COALESCE(SUM(total), 0) AS value
+    FROM orders
+    WHERE status::text <> ${ORDER_STATUS.CANCELLED}
+      AND "deletedAt" IS NULL
+      AND "createdAt" >= ${fromDate}
+    GROUP BY 1
+    ORDER BY 1
+  `;
 
   const series = mapMonthlyBuckets(
-    buckets.map((bucket) => ({ _id: bucket._id, value: Number((bucket.value / 1_000_000).toFixed(2)) })),
+    buckets.map((bucket) => ({
+      _id: bucket.month,
+      value: Number((toNumber(bucket.value) / 1_000_000).toFixed(2))
+    })),
     months
   );
 
@@ -79,10 +87,12 @@ const buildListingsSparkline = async (months = 10) => {
       const monthOffset = months - 1 - index;
       const end = new Date(now.getFullYear(), now.getMonth() - monthOffset + 1, 0, 23, 59, 59);
 
-      return Product.countDocuments({
-        status: PRODUCT_STATUS.PUBLISHED,
-        deletedAt: null,
-        createdAt: { $lte: end }
+      return prisma.product.count({
+        where: {
+          status: PRODUCT_STATUS.PUBLISHED,
+          deletedAt: null,
+          createdAt: { lte: end }
+        }
       });
     })
   );
@@ -95,24 +105,26 @@ const buildActiveOrdersSparkline = async (months = 10) => {
   fromDate.setMonth(fromDate.getMonth() - (months - 1));
   fromDate.setDate(1);
 
-  const buckets = await Order.aggregate([
-    {
-      $match: {
-        status: { $in: [ORDER_STATUS.PENDING, ORDER_STATUS.PROCESSING, ORDER_STATUS.SHIPPED] },
-        deletedAt: null,
-        createdAt: { $gte: fromDate }
-      }
-    },
-    {
-      $group: {
-        _id: { $dateToString: { format: '%Y-%m', date: '$createdAt' } },
-        value: { $sum: 1 }
-      }
-    },
-    { $sort: { _id: 1 } }
-  ]);
+  const buckets = await prisma.$queryRaw`
+    SELECT
+      to_char(date_trunc('month', "createdAt"), 'YYYY-MM') AS month,
+      COUNT(*)::int AS value
+    FROM orders
+    WHERE status::text IN (
+        ${ORDER_STATUS.PENDING},
+        ${ORDER_STATUS.PROCESSING},
+        ${ORDER_STATUS.SHIPPED}
+      )
+      AND "deletedAt" IS NULL
+      AND "createdAt" >= ${fromDate}
+    GROUP BY 1
+    ORDER BY 1
+  `;
 
-  return mapMonthlyBuckets(buckets, months);
+  return mapMonthlyBuckets(
+    buckets.map((bucket) => ({ _id: bucket.month, value: toNumber(bucket.value) })),
+    months
+  );
 };
 
 const formatOrderDate = (date) =>
@@ -133,15 +145,21 @@ export class DashboardService {
     const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const prevMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
 
+    const activeStatuses = [ORDER_STATUS.PENDING, ORDER_STATUS.PROCESSING, ORDER_STATUS.SHIPPED];
+    const notCancelled = {
+      status: { not: ORDER_STATUS.CANCELLED },
+      deletedAt: null
+    };
+
     const [
-      totalSalesResult,
-      prevMonthSalesResult,
+      totalSales,
+      prevMonthSales,
       activeListings,
       prevListings,
       activeOrders,
       prevActiveOrders,
-      monthlyRevenueResult,
-      prevMonthlyRevenueResult,
+      monthlyRevenue,
+      prevMonthlyRevenue,
       totalProducts,
       avgRatingResult,
       pendingOrders,
@@ -150,84 +168,65 @@ export class DashboardService {
       listingsSeries,
       activeOrdersSeries
     ] = await Promise.all([
-      Order.aggregate([
-        {
-          $match: {
-            status: { $ne: ORDER_STATUS.CANCELLED },
-            deletedAt: null
-          }
-        },
-        { $group: { _id: null, total: { $sum: '$total' } } }
-      ]),
-      Order.aggregate([
-        {
-          $match: {
-            status: { $ne: ORDER_STATUS.CANCELLED },
-            deletedAt: null,
-            createdAt: { $lte: prevMonthEnd }
-          }
-        },
-        { $group: { _id: null, total: { $sum: '$total' } } }
-      ]),
-      Product.countDocuments({ status: PRODUCT_STATUS.PUBLISHED, deletedAt: null }),
-      Product.countDocuments({
-        status: PRODUCT_STATUS.PUBLISHED,
-        deletedAt: null,
-        createdAt: { $lte: prevMonthEnd }
+      sumOrderTotal(notCancelled),
+      sumOrderTotal({
+        ...notCancelled,
+        createdAt: { lte: prevMonthEnd }
       }),
-      Order.countDocuments({
-        status: { $in: [ORDER_STATUS.PENDING, ORDER_STATUS.PROCESSING, ORDER_STATUS.SHIPPED] },
-        deletedAt: null
+      prisma.product.count({
+        where: { status: PRODUCT_STATUS.PUBLISHED, deletedAt: null }
       }),
-      Order.countDocuments({
-        status: { $in: [ORDER_STATUS.PENDING, ORDER_STATUS.PROCESSING, ORDER_STATUS.SHIPPED] },
-        deletedAt: null,
-        createdAt: { $lte: prevMonthEnd }
+      prisma.product.count({
+        where: {
+          status: PRODUCT_STATUS.PUBLISHED,
+          deletedAt: null,
+          createdAt: { lte: prevMonthEnd }
+        }
       }),
-      Order.aggregate([
-        {
-          $match: {
-            status: { $ne: ORDER_STATUS.CANCELLED },
-            deletedAt: null,
-            createdAt: { $gte: monthStart }
-          }
-        },
-        { $group: { _id: null, total: { $sum: '$total' } } }
-      ]),
-      Order.aggregate([
-        {
-          $match: {
-            status: { $ne: ORDER_STATUS.CANCELLED },
-            deletedAt: null,
-            createdAt: { $gte: prevMonthStart, $lte: prevMonthEnd }
-          }
-        },
-        { $group: { _id: null, total: { $sum: '$total' } } }
-      ]),
-      Product.countDocuments({ deletedAt: null }),
-      Product.aggregate([
-        { $match: { deletedAt: null, reviewCount: { $gt: 0 } } },
-        { $group: { _id: null, avgRating: { $avg: '$rating' } } }
-      ]),
-      Order.countDocuments({ status: ORDER_STATUS.PENDING, deletedAt: null }),
-      Order.countDocuments({
-        status: ORDER_STATUS.PENDING,
-        deletedAt: null,
-        createdAt: { $lte: prevMonthEnd }
+      prisma.order.count({
+        where: { status: { in: activeStatuses }, deletedAt: null }
+      }),
+      prisma.order.count({
+        where: {
+          status: { in: activeStatuses },
+          deletedAt: null,
+          createdAt: { lte: prevMonthEnd }
+        }
+      }),
+      sumOrderTotal({
+        ...notCancelled,
+        createdAt: { gte: monthStart }
+      }),
+      sumOrderTotal({
+        ...notCancelled,
+        createdAt: { gte: prevMonthStart, lte: prevMonthEnd }
+      }),
+      prisma.product.count({ where: { deletedAt: null } }),
+      prisma.product.aggregate({
+        where: { deletedAt: null, reviewCount: { gt: 0 } },
+        _avg: { rating: true }
+      }),
+      prisma.order.count({
+        where: { status: ORDER_STATUS.PENDING, deletedAt: null }
+      }),
+      prisma.order.count({
+        where: {
+          status: ORDER_STATUS.PENDING,
+          deletedAt: null,
+          createdAt: { lte: prevMonthEnd }
+        }
       }),
       buildSalesSparkline(),
       buildListingsSparkline(),
       buildActiveOrdersSparkline()
     ]);
 
-    const totalSales = totalSalesResult[0]?.total ?? 0;
-    const prevMonthSales = prevMonthSalesResult[0]?.total ?? 0;
-    const monthlyRevenue = monthlyRevenueResult[0]?.total ?? 0;
-    const prevMonthlyRevenue = prevMonthlyRevenueResult[0]?.total ?? 0;
-    const avgRating = avgRatingResult[0]?.avgRating ?? 0;
-    const prevMonthProductCount = await Product.countDocuments({
-      deletedAt: null,
-      createdAt: { $lte: prevMonthEnd }
+    const avgRating = toNumber(avgRatingResult._avg.rating);
+    const prevMonthProductCount = await prisma.product.count({
+      where: {
+        deletedAt: null,
+        createdAt: { lte: prevMonthEnd }
+      }
     });
 
     return {

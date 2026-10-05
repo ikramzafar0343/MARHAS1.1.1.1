@@ -16,7 +16,7 @@ export const getHealth = asyncHandler(async (req, res) => {
 });
 
 export const getReadiness = asyncHandler(async (req, res) => {
-  const database = getDatabaseHealth();
+  const database = await getDatabaseHealth();
   const isReady = database.status === 'connected';
 
   return successResponse(res, {

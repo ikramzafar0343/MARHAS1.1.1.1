@@ -1,10 +1,13 @@
 import { connectDatabase, disconnectDatabase } from './connection.js';
+import { prisma } from './prisma.js';
 import { env } from '../config/env.js';
 import { logger } from '../utils/logger.js';
-import { User } from '../modules/users/user.model.js';
-import { Product, PRODUCT_STATUS } from '../modules/products/product.model.js';
-import { Order } from '../modules/orders/order.model.js';
-import { StorefrontContent } from '../modules/storefront/storefront.model.js';
+import { hashPassword } from '../utils/password.js';
+import { userRepository } from '../modules/users/user.repository.js';
+import { productRepository } from '../modules/products/product.repository.js';
+import { orderRepository } from '../modules/orders/order.repository.js';
+import { storefrontRepository } from '../modules/storefront/storefront.repository.js';
+import { PRODUCT_STATUS } from '../constants/product.js';
 import { STOREFRONT_DEFAULTS } from '../constants/storefrontDefaults.js';
 import { ROLES } from '../constants/roles.js';
 import { ORDER_STATUS, PAYMENT_METHODS } from '../constants/orderStatus.js';
@@ -217,15 +220,15 @@ const SAMPLE_ORDERS = [
 ];
 
 const seedAdmin = async () => {
-  const existing = await User.findOne({ email: env.SEED_ADMIN_EMAIL });
+  const existing = await userRepository.findByEmail(env.SEED_ADMIN_EMAIL);
 
   if (existing) {
     logger.info({ email: env.SEED_ADMIN_EMAIL }, 'Admin user already exists');
     return existing;
   }
 
-  const passwordHash = await User.hashPassword(env.SEED_ADMIN_PASSWORD);
-  const admin = await User.create({
+  const passwordHash = await hashPassword(env.SEED_ADMIN_PASSWORD);
+  const admin = await userRepository.create({
     name: env.SEED_ADMIN_NAME,
     email: env.SEED_ADMIN_EMAIL,
     passwordHash,
@@ -242,7 +245,7 @@ const seedProducts = async () => {
 
   for (let index = 0; index < CATALOG_PRODUCTS.length; index += 1) {
     const catalogItem = CATALOG_PRODUCTS[index];
-    const existing = await Product.findOne({ sku: catalogItem.sku });
+    const existing = await productRepository.findBySku(catalogItem.sku);
 
     if (existing) {
       products.push(existing);
@@ -250,7 +253,7 @@ const seedProducts = async () => {
     }
 
     const payload = buildProductPayload(catalogItem, index);
-    const product = await Product.create(payload);
+    const product = await productRepository.create(payload);
     products.push(product);
     logger.info({ sku: product.sku, title: product.title }, 'Product seeded');
   }
@@ -259,28 +262,29 @@ const seedProducts = async () => {
 };
 
 const seedStorefront = async (adminId) => {
-  const existing = await StorefrontContent.findOne({ key: 'default' });
+  const existing = await storefrontRepository.findByKey('default');
 
   if (existing) {
     logger.info('Storefront content already exists');
     return existing;
   }
 
-  const content = await StorefrontContent.create({
-    key: 'default',
-    isPublished: true,
-    publishedAt: new Date(),
-    navigation: STOREFRONT_DEFAULTS.navigation,
-    heroSlides: STOREFRONT_DEFAULTS.heroSlides,
-    showcase: STOREFRONT_DEFAULTS.showcase,
-    collectionHeroes: new Map(Object.entries(STOREFRONT_DEFAULTS.collectionHeroes)),
-    shopTheLook: STOREFRONT_DEFAULTS.shopTheLook,
-    footerSocial: STOREFRONT_DEFAULTS.footerSocial,
-    authPages: STOREFRONT_DEFAULTS.authPages,
-    commerceSettings: STOREFRONT_DEFAULTS.commerceSettings,
-    createdBy: adminId,
-    updatedBy: adminId
-  });
+  const content = await storefrontRepository.create(
+    {
+      key: 'default',
+      isPublished: true,
+      publishedAt: new Date(),
+      navigation: STOREFRONT_DEFAULTS.navigation,
+      heroSlides: STOREFRONT_DEFAULTS.heroSlides,
+      showcase: STOREFRONT_DEFAULTS.showcase,
+      collectionHeroes: STOREFRONT_DEFAULTS.collectionHeroes,
+      shopTheLook: STOREFRONT_DEFAULTS.shopTheLook,
+      footerSocial: STOREFRONT_DEFAULTS.footerSocial,
+      authPages: STOREFRONT_DEFAULTS.authPages,
+      commerceSettings: STOREFRONT_DEFAULTS.commerceSettings
+    },
+    { updatedBy: adminId }
+  );
 
   logger.info('Storefront content seeded');
   return content;
@@ -290,7 +294,7 @@ const buildOrderItems = (orderTemplate, productMap) =>
   orderTemplate.items.map((item) => {
     const product = productMap.get(item.sku);
     return {
-      productId: product._id,
+      productId: product.id || product._id,
       name: product.title,
       sku: product.sku,
       quantity: item.quantity,
@@ -303,7 +307,7 @@ const buildOrderItems = (orderTemplate, productMap) =>
   });
 
 const seedOrders = async (products, adminId) => {
-  const existingCount = await Order.countDocuments();
+  const existingCount = await prisma.order.count();
   if (existingCount >= SAMPLE_ORDERS.length) {
     logger.info({ count: existingCount }, 'Orders already seeded');
     return;
@@ -312,7 +316,9 @@ const seedOrders = async (products, adminId) => {
   const productMap = new Map(products.map((product) => [product.sku, product]));
 
   for (const template of SAMPLE_ORDERS) {
-    const exists = await Order.findOne({ orderNumber: template.orderNumber });
+    const exists = await prisma.order.findFirst({
+      where: { orderNumber: template.orderNumber }
+    });
     if (exists) {
       continue;
     }
@@ -323,27 +329,30 @@ const seedOrders = async (products, adminId) => {
     const createdAt = new Date();
     createdAt.setDate(createdAt.getDate() - template.daysAgo);
 
-    await Order.create({
-      orderNumber: template.orderNumber,
-      customer: template.customer,
-      email: template.email,
-      phone: template.phone,
-      shipping: {
-        address: '12 Mall Road',
-        city: 'Lahore',
-        postalCode: '54000'
+    await orderRepository.create(
+      {
+        orderNumber: template.orderNumber,
+        customer: template.customer,
+        email: template.email,
+        phone: template.phone,
+        shipping: {
+          address: '12 Mall Road',
+          city: 'Lahore',
+          postalCode: '54000'
+        },
+        paymentMethod: PAYMENT_METHODS.COD,
+        status: template.status,
+        items,
+        subtotal,
+        shippingFee,
+        taxAmount: 0,
+        taxRate: 0,
+        total: subtotal + shippingFee,
+        createdAt,
+        updatedAt: createdAt
       },
-      paymentMethod: PAYMENT_METHODS.COD,
-      status: template.status,
-      items,
-      subtotal,
-      shippingFee,
-      total: subtotal + shippingFee,
-      createdBy: adminId,
-      updatedBy: adminId,
-      createdAt,
-      updatedAt: createdAt
-    });
+      { updatedBy: adminId }
+    );
 
     logger.info({ orderNumber: template.orderNumber }, 'Order seeded');
   }
@@ -353,7 +362,7 @@ const runSeed = async () => {
   await connectDatabase();
 
   const admin = await seedAdmin();
-  const adminId = admin._id.toString();
+  const adminId = admin.id || admin._id;
   const products = await seedProducts();
   await seedStorefront(adminId);
   await seedOrders(products, adminId);

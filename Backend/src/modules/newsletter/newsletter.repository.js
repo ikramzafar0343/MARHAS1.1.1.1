@@ -1,59 +1,82 @@
-import { NewsletterSubscriber } from './newsletter.model.js';
+import { prisma } from '../../database/prisma.js';
+import { toEntity } from '../../database/mapper.js';
 import { AppError } from '../../utils/AppError.js';
 
+const mapSub = (row) => toEntity(row);
+
+const toOrderBy = (sort = { subscribedAt: -1 }) =>
+  Object.entries(sort).map(([key, value]) => ({
+    [key]: value === 1 || value === 'asc' ? 'asc' : 'desc'
+  }));
+
 export class NewsletterRepository {
-  constructor(model = NewsletterSubscriber) {
-    this.model = model;
+  constructor(client = prisma) {
+    this.db = client;
   }
 
   async subscribe(email, source = 'footer') {
     const normalizedEmail = email.toLowerCase().trim();
-    const existing = await this.model
-      .findOne({ email: normalizedEmail })
-      .setOptions({ includeDeleted: true })
-      .exec();
-
-    if (existing) {
-      if (existing.deletedAt) {
-        existing.deletedAt = null;
-      }
-      existing.isActive = true;
-      existing.source = source;
-      existing.subscribedAt = new Date();
-      existing.unsubscribedAt = null;
-      return existing.save();
-    }
-
-    const subscriber = new this.model({
-      email: normalizedEmail,
-      source,
-      subscribedAt: new Date(),
-      isActive: true
+    const existing = await this.db.newsletterSubscriber.findFirst({
+      where: { email: normalizedEmail }
     });
 
-    return subscriber.save();
+    if (existing) {
+      const updated = await this.db.newsletterSubscriber.update({
+        where: { id: existing.id },
+        data: {
+          deletedAt: null,
+          isActive: true,
+          source,
+          subscribedAt: new Date(),
+          unsubscribedAt: null
+        }
+      });
+      return mapSub(updated);
+    }
+
+    const created = await this.db.newsletterSubscriber.create({
+      data: {
+        email: normalizedEmail,
+        source,
+        subscribedAt: new Date(),
+        isActive: true
+      }
+    });
+    return mapSub(created);
   }
 
   async findByEmail(email) {
-    return this.model.findOne({ email: email.toLowerCase().trim() }).exec();
+    const row = await this.db.newsletterSubscriber.findFirst({
+      where: { email: email.toLowerCase().trim(), deletedAt: null }
+    });
+    return mapSub(row);
   }
 
   async findById(id) {
-    return this.model.findById(id).exec();
+    const row = await this.db.newsletterSubscriber.findFirst({
+      where: { id, deletedAt: null }
+    });
+    return mapSub(row);
   }
 
   async findPaginated({ page = 1, limit = 50, filter = {}, sort = { subscribedAt: -1 } } = {}) {
     const safePage = Math.max(1, page);
     const safeLimit = Math.min(Math.max(1, limit), 200);
     const skip = (safePage - 1) * safeLimit;
+    const where = { deletedAt: null, ...filter };
 
     const [docs, total] = await Promise.all([
-      this.model.find(filter).sort(sort).skip(skip).limit(safeLimit).lean(),
-      this.model.countDocuments(filter)
+      this.db.newsletterSubscriber.findMany({
+        where,
+        orderBy: toOrderBy(sort),
+        skip,
+        take: safeLimit
+      }),
+      this.db.newsletterSubscriber.count({ where })
     ]);
 
     return {
-      docs,
+      docs: docs.map(mapSub),
       pagination: {
         page: safePage,
         limit: safeLimit,
@@ -74,37 +97,41 @@ export class NewsletterRepository {
   }
 
   async unsubscribe(email) {
-    return this.model
-      .findOneAndUpdate(
-        { email: email.toLowerCase().trim() },
-        { isActive: false, unsubscribedAt: new Date() },
-        { returnDocument: 'after', runValidators: true }
-      )
-      .exec();
+    const existing = await this.findByEmail(email);
+    if (!existing) return null;
+    const updated = await this.db.newsletterSubscriber.update({
+      where: { id: existing.id },
+      data: { isActive: false, unsubscribedAt: new Date() }
+    });
+    return mapSub(updated);
   }
 
   async softDeleteByEmail(email) {
-    const subscriber = await this.findByEmail(email);
-    if (!subscriber) {
-      return null;
-    }
-    return subscriber.softDelete();
+    const existing = await this.findByEmail(email);
+    if (!existing) return null;
+    const updated = await this.db.newsletterSubscriber.update({
+      where: { id: existing.id },
+      data: { deletedAt: new Date() }
+    });
+    return mapSub(updated);
   }
 
   async countActive() {
-    return this.model.countDocuments({ isActive: true });
+    return this.db.newsletterSubscriber.count({
+      where: { isActive: true, deletedAt: null }
+    });
   }
 
   async emailExists(email) {
-    const count = await this.model.countDocuments({ email: email.toLowerCase().trim() });
+    const count = await this.db.newsletterSubscriber.count({
+      where: { email: email.toLowerCase().trim(), deletedAt: null }
+    });
     return count > 0;
   }
 
   async assertByEmail(email) {
     const subscriber = await this.findByEmail(email);
-    if (!subscriber) {
-      throw new AppError('Newsletter subscriber not found', 404);
-    }
+    if (!subscriber) throw new AppError('Subscriber not found', 404);
     return subscriber;
   }
 }

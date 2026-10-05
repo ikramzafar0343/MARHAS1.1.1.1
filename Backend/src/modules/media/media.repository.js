@@ -1,60 +1,63 @@
-import { MediaAsset, STORAGE_PROVIDERS } from './media.model.js';
+import { prisma } from '../../database/prisma.js';
+import { toEntity, softDeleteFilter } from '../../database/mapper.js';
 import { AppError } from '../../utils/AppError.js';
 
+const mapMedia = (row) => toEntity(row);
+
+const toOrderBy = (sort = { createdAt: -1 }) =>
+  Object.entries(sort).map(([key, value]) => ({
+    [key]: value === 1 || value === 'asc' ? 'asc' : 'desc'
+  }));
+
 export class MediaRepository {
-  constructor(model = MediaAsset) {
-    this.model = model;
+  constructor(client = prisma) {
+    this.db = client;
   }
 
   async create(data) {
-    const asset = new this.model(data);
-    return asset.save();
+    const asset = await this.db.mediaAsset.create({ data });
+    return mapMedia(asset);
   }
 
   async findById(id, options = {}) {
-    let query = this.model.findById(id);
-
-    if (options.includeDeleted) {
-      query = query.setOptions({ includeDeleted: true });
-    }
-    if (options.lean) {
-      query = query.lean();
-    }
-
-    return query.exec();
+    const asset = await this.db.mediaAsset.findFirst({
+      where: { id, ...softDeleteFilter(options.includeDeleted) }
+    });
+    return mapMedia(asset);
   }
 
   async findByFilename(filename, options = {}) {
-    let query = this.model.findOne({ filename });
-
-    if (options.includeDeleted) {
-      query = query.setOptions({ includeDeleted: true });
-    }
-
-    return query.exec();
+    const asset = await this.db.mediaAsset.findFirst({
+      where: { filename, ...softDeleteFilter(options.includeDeleted) }
+    });
+    return mapMedia(asset);
   }
 
   async findByStorageKey(storageKey) {
-    return this.model.findOne({ storageKey }).exec();
+    const asset = await this.db.mediaAsset.findFirst({
+      where: { storageKey, deletedAt: null }
+    });
+    return mapMedia(asset);
   }
 
-  async findPaginated({
-    page = 1,
-    limit = 30,
-    filter = {},
-    sort = { createdAt: -1 }
-  } = {}) {
+  async findPaginated({ page = 1, limit = 30, filter = {}, sort = { createdAt: -1 } } = {}) {
     const safePage = Math.max(1, page);
     const safeLimit = Math.min(Math.max(1, limit), 100);
     const skip = (safePage - 1) * safeLimit;
+    const where = { deletedAt: null, ...filter };
 
     const [docs, total] = await Promise.all([
-      this.model.find(filter).sort(sort).skip(skip).limit(safeLimit).lean(),
-      this.model.countDocuments(filter)
+      this.db.mediaAsset.findMany({
+        where,
+        orderBy: toOrderBy(sort),
+        skip,
+        take: safeLimit
+      }),
+      this.db.mediaAsset.count({ where })
     ]);
 
     return {
-      docs,
+      docs: docs.map(mapMedia),
       pagination: {
         page: safePage,
         limit: safeLimit,
@@ -83,59 +86,47 @@ export class MediaRepository {
   }
 
   async findByMimeTypePrefix(prefix, options = {}) {
-    const regex = new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'i');
     return this.findPaginated({
       page: options.page,
       limit: options.limit,
-      filter: { mimeType: regex }
+      filter: { mimeType: { startsWith: prefix } }
     });
   }
 
   async updateById(id, data) {
-    return this.model
-      .findByIdAndUpdate(id, data, { returnDocument: 'after', runValidators: true })
-      .exec();
+    try {
+      const asset = await this.db.mediaAsset.update({ where: { id }, data });
+      return mapMedia(asset);
+    } catch {
+      return null;
+    }
   }
 
   async softDeleteById(id) {
-    const asset = await this.findById(id);
-    if (!asset) {
-      return null;
-    }
-    return asset.softDelete();
+    return this.updateById(id, { deletedAt: new Date() });
   }
 
   async restoreById(id) {
-    const asset = await this.model
-      .findById(id)
-      .setOptions({ includeDeleted: true })
-      .exec();
-    if (!asset) {
-      return null;
-    }
-    return asset.restore();
+    return this.updateById(id, { deletedAt: null });
   }
 
   async assertExists(id) {
     const asset = await this.findById(id);
-    if (!asset) {
-      throw new AppError('Media asset not found', 404);
-    }
+    if (!asset) throw new AppError('Media asset not found', 404);
     return asset;
   }
 
-  async totalStorageUsed(filter = {}) {
-    const [result] = await this.model.aggregate([
-      { $match: { ...filter, deletedAt: null } },
-      { $group: { _id: null, totalBytes: { $sum: '$size' }, count: { $sum: 1 } } }
-    ]);
-
+  async totalStorageUsed() {
+    const result = await this.db.mediaAsset.aggregate({
+      where: { deletedAt: null },
+      _sum: { size: true },
+      _count: { _all: true }
+    });
     return {
-      totalBytes: result?.totalBytes ?? 0,
-      count: result?.count ?? 0
+      totalBytes: result._sum.size || 0,
+      count: result._count._all
     };
   }
 }
 
-export { STORAGE_PROVIDERS };
 export const mediaRepository = new MediaRepository();

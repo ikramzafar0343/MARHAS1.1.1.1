@@ -1,4 +1,7 @@
-import { Product, PRODUCT_STATUS } from './product.model.js';
+import { Prisma } from '@prisma/client';
+import { prisma } from '../../database/prisma.js';
+import { normalizeProduct, softDeleteFilter } from '../../database/mapper.js';
+import { PRODUCT_STATUS } from '../../constants/product.js';
 import { AppError } from '../../utils/AppError.js';
 
 const slugify = (text) =>
@@ -19,70 +22,64 @@ const buildPagination = (page, limit, total) => ({
   hasPrev: page > 1
 });
 
+const toOrderBy = (sort = { createdAt: -1 }) =>
+  Object.entries(sort).map(([key, value]) => ({
+    [key]: value === 1 || value === 'asc' ? 'asc' : 'desc'
+  }));
+
 export class ProductRepository {
-  constructor(model = Product) {
-    this.model = model;
+  constructor(client = prisma) {
+    this.db = client;
   }
 
   async create(data, options = {}) {
     const payload = { ...data };
-
     if (!payload.slug && payload.title) {
       payload.slug = slugify(payload.title);
     }
-
+    if (payload.sku) payload.sku = payload.sku.toUpperCase().trim();
+    if (payload.slug) payload.slug = payload.slug.toLowerCase().trim();
     if (options.updatedBy) {
       payload.updatedBy = options.updatedBy;
+      payload.createdBy = options.updatedBy;
     }
 
-    const product = new this.model(payload);
-    return product.save();
+    const product = await this.db.product.create({ data: payload });
+    return normalizeProduct(product);
   }
 
   async findById(id, options = {}) {
-    let query = this.model.findById(id);
-
-    if (options.includeDeleted) {
-      query = query.setOptions({ includeDeleted: true });
-    }
-    if (options.lean) {
-      query = query.lean();
-    }
-
-    return query.exec();
+    const product = await this.db.product.findFirst({
+      where: { id, ...softDeleteFilter(options.includeDeleted) }
+    });
+    return normalizeProduct(product);
   }
 
   async findBySlug(slug, options = {}) {
-    let query = this.model.findOne({ slug: slug.toLowerCase().trim() });
-
-    if (options.includeDeleted) {
-      query = query.setOptions({ includeDeleted: true });
-    }
-    if (options.lean) {
-      query = query.lean();
-    }
-
-    return query.exec();
+    const product = await this.db.product.findFirst({
+      where: {
+        slug: slug.toLowerCase().trim(),
+        ...softDeleteFilter(options.includeDeleted)
+      }
+    });
+    return normalizeProduct(product);
   }
 
   async findBySku(sku, options = {}) {
-    let query = this.model.findOne({ sku: sku.toUpperCase().trim() });
-
-    if (options.includeDeleted) {
-      query = query.setOptions({ includeDeleted: true });
-    }
-
-    return query.exec();
+    const product = await this.db.product.findFirst({
+      where: {
+        sku: sku.toUpperCase().trim(),
+        ...softDeleteFilter(options.includeDeleted)
+      }
+    });
+    return normalizeProduct(product);
   }
 
-  async findByIds(ids, options = {}) {
-    let query = this.model.find({ _id: { $in: ids } });
-
-    if (options.lean) {
-      query = query.lean();
-    }
-
-    return query.exec();
+  async findByIds(ids) {
+    const products = await this.db.product.findMany({
+      where: { id: { in: ids }, deletedAt: null }
+    });
+    return products.map(normalizeProduct);
   }
 
   buildFilter({
@@ -92,72 +89,100 @@ export class ProductRepository {
     minPrice,
     maxPrice,
     stockStatus,
-    search,
     includeDraft = false
   } = {}) {
-    const filter = {};
+    const where = { deletedAt: null };
 
-    if (category) {
-      filter.category = category;
-    }
+    if (category) where.category = category;
 
     if (status) {
-      filter.status = includeDraft ? status : status;
+      where.status = status;
     } else if (!includeDraft) {
-      filter.status = PRODUCT_STATUS.PUBLISHED;
+      where.status = PRODUCT_STATUS.PUBLISHED;
     }
 
-    if (typeof bestSeller === 'boolean') {
-      filter.bestSeller = bestSeller;
-    }
+    if (typeof bestSeller === 'boolean') where.bestSeller = bestSeller;
 
     if (minPrice !== undefined || maxPrice !== undefined) {
-      filter.price = {};
-      if (minPrice !== undefined) {
-        filter.price.$gte = minPrice;
-      }
-      if (maxPrice !== undefined) {
-        filter.price.$lte = maxPrice;
-      }
+      where.price = {};
+      if (minPrice !== undefined) where.price.gte = minPrice;
+      if (maxPrice !== undefined) where.price.lte = maxPrice;
     }
 
     if (stockStatus === 'in-stock') {
-      filter.stock = { $gt: 0 };
+      where.stock = { gt: 0 };
     } else if (stockStatus === 'out-of-stock') {
-      filter.stock = { $lte: 0 };
+      where.stock = { lte: 0 };
     } else if (stockStatus === 'low-stock') {
-      filter.$expr = {
-        $and: [{ $gt: ['$stock', 0] }, { $lte: ['$stock', '$lowStockThreshold'] }]
-      };
+      where.AND = [
+        { stock: { gt: 0 } },
+        { stock: { lte: this.db.product.fields ? undefined : undefined } }
+      ];
+      // Prisma cannot compare two columns in where — use raw filter via AND in findPaginated
+      where.__lowStock = true;
+      delete where.AND;
     }
 
-    if (search) {
-      filter.$text = { $search: search };
-    }
-
-    return filter;
+    return where;
   }
 
   async findPaginated({
     page = 1,
     limit = 20,
     filter = {},
-    sort = { createdAt: -1 },
-    lean = true
+    sort = { createdAt: -1 }
   } = {}) {
     const safePage = Math.max(1, page);
     const safeLimit = Math.min(Math.max(1, limit), 100);
     const skip = (safePage - 1) * safeLimit;
 
-    let query = this.model.find(filter).sort(sort).skip(skip).limit(safeLimit);
-    if (lean) {
-      query = query.lean();
+    const where = { ...filter };
+    const lowStock = where.__lowStock;
+    delete where.__lowStock;
+    delete where.$text;
+    delete where.$or;
+    delete where.$expr;
+
+    if (lowStock) {
+      const rows = await this.db.$queryRaw`
+        SELECT id, title, slug, sku, category, price, "originalPrice", discount, "discountType",
+               description, specifications, "returnPolicy", sizes, colors, variants, images,
+               "bestSeller", stock, "lowStockThreshold", rating, "reviewCount", status,
+               "deletedAt", "createdBy", "updatedBy", "createdAt", "updatedAt"
+        FROM products
+        WHERE "deletedAt" IS NULL
+          AND stock > 0
+          AND stock <= "lowStockThreshold"
+          ${where.status ? Prisma.sql`AND status = ${where.status}::"ProductStatus"` : Prisma.empty}
+        ORDER BY "createdAt" DESC
+        LIMIT ${safeLimit} OFFSET ${skip}
+      `;
+      const totalRows = await this.db.$queryRaw`
+        SELECT COUNT(*)::int AS count FROM products
+        WHERE "deletedAt" IS NULL
+          AND stock > 0
+          AND stock <= "lowStockThreshold"
+          ${where.status ? Prisma.sql`AND status = ${where.status}::"ProductStatus"` : Prisma.empty}
+      `;
+      const total = totalRows[0]?.count || 0;
+      return {
+        docs: rows.map(normalizeProduct),
+        pagination: buildPagination(safePage, safeLimit, total)
+      };
     }
 
-    const [docs, total] = await Promise.all([query.exec(), this.model.countDocuments(filter)]);
+    const [docs, total] = await Promise.all([
+      this.db.product.findMany({
+        where,
+        orderBy: toOrderBy(sort),
+        skip,
+        take: safeLimit
+      }),
+      this.db.product.count({ where })
+    ]);
 
     return {
-      docs,
+      docs: docs.map(normalizeProduct),
       pagination: buildPagination(safePage, safeLimit, total)
     };
   }
@@ -171,13 +196,11 @@ export class ProductRepository {
       stockStatus: options.stockStatus
     });
 
-    const sort = options.sort || { createdAt: -1 };
-
     return this.findPaginated({
       page: options.page,
       limit: options.limit,
       filter,
-      sort
+      sort: options.sort || { createdAt: -1 }
     });
   }
 
@@ -186,6 +209,7 @@ export class ProductRepository {
       page,
       limit,
       filter: {
+        deletedAt: null,
         status: PRODUCT_STATUS.PUBLISHED,
         bestSeller: true
       },
@@ -199,115 +223,101 @@ export class ProductRepository {
       return this.findPublished({ page, limit, category });
     }
 
-    const filter = this.buildFilter({ category, search: trimmed });
+    const safePage = Math.max(1, page);
+    const safeLimit = Math.min(Math.max(1, limit), 100);
+    const skip = (safePage - 1) * safeLimit;
 
-    try {
-      return this.findPaginated({
-        page,
-        limit,
-        filter,
-        sort: { score: { $meta: 'textScore' }, createdAt: -1 }
-      });
-    } catch {
-      const regex = new RegExp(trimmed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-      delete filter.$text;
-      filter.$or = [{ title: regex }, { sku: regex }, { 'description.intro': regex }];
+    const rows = await this.db.$queryRaw`
+      SELECT id, title, slug, sku, category, price, "originalPrice", discount, "discountType",
+             description, specifications, "returnPolicy", sizes, colors, variants, images,
+             "bestSeller", stock, "lowStockThreshold", rating, "reviewCount", status,
+             "deletedAt", "createdBy", "updatedBy", "createdAt", "updatedAt",
+             ts_rank("searchVector", plainto_tsquery('english', ${trimmed})) AS rank
+      FROM products
+      WHERE "deletedAt" IS NULL
+        AND status = 'published'::"ProductStatus"
+        AND "searchVector" @@ plainto_tsquery('english', ${trimmed})
+        ${category ? Prisma.sql`AND category = ${category}` : Prisma.empty}
+      ORDER BY rank DESC, "createdAt" DESC
+      LIMIT ${safeLimit} OFFSET ${skip}
+    `;
 
-      return this.findPaginated({
-        page,
-        limit,
-        filter,
-        sort: { createdAt: -1 }
-      });
-    }
+    const countRows = await this.db.$queryRaw`
+      SELECT COUNT(*)::int AS count
+      FROM products
+      WHERE "deletedAt" IS NULL
+        AND status = 'published'::"ProductStatus"
+        AND "searchVector" @@ plainto_tsquery('english', ${trimmed})
+        ${category ? Prisma.sql`AND category = ${category}` : Prisma.empty}
+    `;
+
+    const total = countRows[0]?.count || 0;
+    return {
+      docs: rows.map(normalizeProduct),
+      pagination: buildPagination(safePage, safeLimit, total)
+    };
   }
 
   async updateById(id, data, options = {}) {
     const update = { ...data };
-
     if (update.title && !update.slug) {
       update.slug = slugify(update.title);
     }
+    if (update.sku) update.sku = update.sku.toUpperCase().trim();
+    if (update.slug) update.slug = update.slug.toLowerCase().trim();
+    if (options.updatedBy) update.updatedBy = options.updatedBy;
 
-    if (options.updatedBy) {
-      update.updatedBy = options.updatedBy;
+    try {
+      const product = await this.db.product.update({ where: { id }, data: update });
+      return normalizeProduct(product);
+    } catch {
+      return null;
     }
-
-    return this.model
-      .findByIdAndUpdate(id, update, { returnDocument: 'after', runValidators: true })
-      .exec();
   }
 
   async updateStock(id, stock, options = {}) {
-    const update = { stock };
-    if (options.updatedBy) {
-      update.updatedBy = options.updatedBy;
-    }
-
-    return this.model
-      .findByIdAndUpdate(id, update, { returnDocument: 'after', runValidators: true })
-      .exec();
+    return this.updateById(id, { stock }, options);
   }
 
   async adjustStock(id, quantityDelta, options = {}) {
-    const normalizedId = id?._id ?? id;
-    const product = await this.findById(normalizedId, { lean: true });
-    if (!product) {
-      return null;
-    }
+    const normalizedId = id?.id ?? id?._id ?? id;
+    const product = await this.findById(normalizedId);
+    if (!product) return null;
 
     const previousStock = product.stock;
     const newStock = Math.max(0, previousStock + quantityDelta);
-    const update = { stock: newStock };
-    if (options.updatedBy) {
-      update.updatedBy = options.updatedBy;
-    }
-
-    const saved = await this.model
-      .findByIdAndUpdate(normalizedId, update, { returnDocument: 'after', runValidators: false })
-      .exec();
-
-    if (!saved) {
-      return null;
-    }
-
+    const saved = await this.updateStock(normalizedId, newStock, options);
+    if (!saved) return null;
     return { product: saved, previousStock, newStock: saved.stock };
   }
 
   async softDeleteById(id, updatedBy = null) {
-    const product = await this.findById(id);
-    if (!product) {
-      return null;
-    }
-    return product.softDelete(updatedBy);
+    return this.updateById(id, { deletedAt: new Date() }, { updatedBy });
   }
 
   async restoreById(id, updatedBy = null) {
-    const product = await this.model
-      .findById(id)
-      .setOptions({ includeDeleted: true })
-      .exec();
-    if (!product) {
-      return null;
-    }
-    return product.restore(updatedBy);
+    return this.updateById(id, { deletedAt: null }, { updatedBy });
   }
 
   async slugExists(slug, excludeId = null) {
-    const filter = { slug: slug.toLowerCase().trim() };
-    if (excludeId) {
-      filter._id = { $ne: excludeId };
-    }
-    const count = await this.model.countDocuments(filter);
+    const count = await this.db.product.count({
+      where: {
+        slug: slug.toLowerCase().trim(),
+        deletedAt: null,
+        ...(excludeId ? { id: { not: excludeId } } : {})
+      }
+    });
     return count > 0;
   }
 
   async skuExists(sku, excludeId = null) {
-    const filter = { sku: sku.toUpperCase().trim() };
-    if (excludeId) {
-      filter._id = { $ne: excludeId };
-    }
-    const count = await this.model.countDocuments(filter);
+    const count = await this.db.product.count({
+      where: {
+        sku: sku.toUpperCase().trim(),
+        deletedAt: null,
+        ...(excludeId ? { id: { not: excludeId } } : {})
+      }
+    });
     return count > 0;
   }
 
@@ -315,25 +325,23 @@ export class ProductRepository {
     let baseSlug = slugify(title);
     let slug = baseSlug;
     let counter = 1;
-
     while (await this.slugExists(slug, excludeId)) {
       slug = `${baseSlug}-${counter}`;
       counter += 1;
     }
-
     return slug;
   }
 
   async assertExists(id) {
     const product = await this.findById(id);
-    if (!product) {
-      throw new AppError('Product not found', 404);
-    }
+    if (!product) throw new AppError('Product not found', 404);
     return product;
   }
 
   async count(filter = {}) {
-    return this.model.countDocuments(filter);
+    const where = { deletedAt: null, ...filter };
+    delete where.__lowStock;
+    return this.db.product.count({ where });
   }
 }
 

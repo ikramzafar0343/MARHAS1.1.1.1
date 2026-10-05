@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { paginationSchema, mongoIdParamSchema } from '../../middlewares/validate.middleware.js';
-import { PRODUCT_CATEGORIES, PRODUCT_STATUS } from '../products/product.model.js';
+import { paginationSchema, uuidParamSchema } from '../../middlewares/validate.middleware.js';
+import { PRODUCT_CATEGORIES, PRODUCT_STATUS } from '../../constants/product.js';
 
 export const listInventorySchema = paginationSchema.extend({
   filter: z.enum(['all', 'in-stock', 'low-stock', 'out-of-stock']).default('all'),
@@ -27,4 +27,4 @@ export const restockSchema = z.object({
   note: z.string().max(500).optional()
 });
 
-export { mongoIdParamSchema };
+export { uuidParamSchema };

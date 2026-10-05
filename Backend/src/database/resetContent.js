@@ -1,6 +1,6 @@
 import { connectDatabase, disconnectDatabase } from './connection.js';
+import { prisma } from './prisma.js';
 import { logger } from '../utils/logger.js';
-import { Product } from '../modules/products/product.model.js';
 import { STOREFRONT_DEFAULTS } from '../constants/storefrontDefaults.js';
 import { storefrontRepository } from '../modules/storefront/storefront.repository.js';
 
@@ -33,7 +33,9 @@ export const resetStorefrontContent = async () => {
 };
 
 export const resetBrokenProductImages = async () => {
-  const products = await Product.find({}).sort({ sku: 1 });
+  const products = await prisma.product.findMany({
+    orderBy: { sku: 'asc' }
+  });
   let updated = 0;
 
   for (let index = 0; index < products.length; index += 1) {
@@ -50,27 +52,21 @@ export const resetBrokenProductImages = async () => {
       order
     }));
 
-    const variants = (product.variants || []).map((variant) => {
-      const plain = typeof variant.toObject === 'function' ? variant.toObject() : { ...variant };
+    const variants = (product.variants || []).map((variant) => ({
+      ...variant,
+      images: images.slice(0, 2).map((image) => ({
+        url: image.url,
+        alt: image.alt
+      }))
+    }));
 
-      return {
-        ...plain,
-        images: images.slice(0, 2).map((image) => ({
-          url: image.url,
-          alt: image.alt
-        }))
-      };
-    });
-
-    await Product.updateOne(
-      { _id: product._id },
-      {
-        $set: {
-          images,
-          variants
-        }
+    await prisma.product.update({
+      where: { id: product.id },
+      data: {
+        images,
+        variants
       }
-    );
+    });
 
     updated += 1;
     logger.info({ sku: product.sku }, 'Product images reset to bundled assets');

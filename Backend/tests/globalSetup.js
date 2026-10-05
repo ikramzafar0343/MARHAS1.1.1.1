@@ -1,10 +1,18 @@
-import { MongoMemoryServer } from 'mongodb-memory-server';
+import { execSync } from 'child_process';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-let mongoServer;
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const backendRoot = path.resolve(__dirname, '..');
 
 export default async function globalSetup() {
-  mongoServer = await MongoMemoryServer.create();
-  process.env.MONGODB_URI = mongoServer.getUri();
-  process.env.DATABASE_NAME = 'marhas-test';
-  global.__MONGO_SERVER__ = mongoServer;
+  process.env.DATABASE_URL =
+    process.env.DATABASE_URL ||
+    'postgresql://postgres:postgres@127.0.0.1:5432/marhas_test?schema=public&connection_limit=5';
+
+  execSync('npx prisma migrate deploy', {
+    cwd: backendRoot,
+    env: process.env,
+    stdio: 'inherit'
+  });
 }

@@ -1,11 +1,11 @@
 import crypto from 'node:crypto';
 import bcrypt from 'bcrypt';
-import { User } from '../users/user.model.js';
 import { UserRepository } from '../users/user.repository.js';
 import { ADMIN_ROLES, ROLES } from '../../constants/roles.js';
 import { env } from '../../config/env.js';
 import { AppError } from '../../utils/AppError.js';
 import { logger } from '../../utils/logger.js';
+import { hashPassword, comparePassword } from '../../utils/password.js';
 import { emailService } from '../../services/email.service.js';
 import { tokenService } from '../../services/token.service.js';
 
@@ -91,7 +91,7 @@ export class AuthService {
       throw new AppError('Email is already registered', 409);
     }
 
-    const passwordHash = await User.hashPassword(data.password);
+    const passwordHash = await hashPassword(data.password);
     const verificationToken = emailService.generateToken();
 
     const user = await this.userRepository.create({
@@ -128,7 +128,7 @@ export class AuthService {
       throw new AppError('Admin access required', 403);
     }
 
-    const isValid = await user.comparePassword(data.password);
+    const isValid = await comparePassword(data.password, user.passwordHash);
     if (!isValid) {
       throw new AppError('Invalid email or password', 401);
     }
@@ -214,7 +214,7 @@ export class AuthService {
       throw new AppError('Admin access required', 403);
     }
 
-    const isValid = await user.comparePassword(data.password);
+    const isValid = await comparePassword(data.password, user.passwordHash);
     if (!isValid) {
       throw new AppError('Invalid email or password', 401);
     }
@@ -289,7 +289,7 @@ export class AuthService {
       throw new AppError('Invalid or expired reset token', 400);
     }
 
-    const passwordHash = await User.hashPassword(password);
+    const passwordHash = await hashPassword(password);
     await this.userRepository.updatePassword(user._id, passwordHash);
     await this.userRepository.revokeAllRefreshTokens(user._id);
 
@@ -309,12 +309,12 @@ export class AuthService {
       throw new AppError('User not found', 404);
     }
 
-    const isValid = await user.comparePassword(currentPassword);
+    const isValid = await comparePassword(currentPassword, user.passwordHash);
     if (!isValid) {
       throw new AppError('Current password is incorrect', 400);
     }
 
-    const passwordHash = await User.hashPassword(newPassword);
+    const passwordHash = await hashPassword(newPassword);
     await this.userRepository.updatePassword(userId, passwordHash, userId);
     await this.userRepository.revokeAllRefreshTokens(userId);
 

@@ -7,7 +7,7 @@ import { AppError } from '../../utils/AppError.js';
 import { asyncHandler } from '../../utils/asyncHandler.js';
 import { successResponse } from '../../utils/apiResponse.js';
 import { mediaRepository } from '../media/media.repository.js';
-import { STORAGE_PROVIDERS } from '../media/media.model.js';
+import { STORAGE_PROVIDERS } from '../../constants/storage.js';
 
 const uploadRoot = path.resolve(process.cwd(), env.UPLOAD_DIR);
 

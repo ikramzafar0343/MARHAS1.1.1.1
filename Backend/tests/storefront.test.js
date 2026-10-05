@@ -2,8 +2,9 @@ import request from 'supertest';
 import { createApp } from '../src/app.js';
 import { env } from '../src/config/env.js';
 import { ROLES } from '../src/constants/roles.js';
-import { StorefrontContent } from '../src/modules/storefront/storefront.model.js';
-import { User } from '../src/modules/users/user.model.js';
+import { hashPassword } from '../src/utils/password.js';
+import { userRepository } from '../src/modules/users/user.repository.js';
+import { storefrontRepository } from '../src/modules/storefront/storefront.repository.js';
 import { STOREFRONT_DEFAULTS } from '../src/constants/storefrontDefaults.js';
 import { loginAdmin } from './helpers/adminAuth.js';
 
@@ -11,8 +12,8 @@ describe('Storefront API', () => {
   const app = createApp();
 
   beforeEach(async () => {
-    const passwordHash = await User.hashPassword(env.SEED_ADMIN_PASSWORD);
-    await User.create({
+    const passwordHash = await hashPassword(env.SEED_ADMIN_PASSWORD);
+    await userRepository.create({
       name: env.SEED_ADMIN_NAME,
       email: env.SEED_ADMIN_EMAIL,
       passwordHash,
@@ -20,7 +21,7 @@ describe('Storefront API', () => {
       isEmailVerified: true
     });
 
-    await StorefrontContent.create({
+    await storefrontRepository.create({
       key: 'default',
       isPublished: true,
       navigation: STOREFRONT_DEFAULTS.navigation,

@@ -1,9 +1,14 @@
 import request from 'supertest';
 import { createApp } from '../src/app.js';
-import { Product, PRODUCT_STATUS } from '../src/modules/products/product.model.js';
-import { User } from '../src/modules/users/user.model.js';
-import { Order } from '../src/modules/orders/order.model.js';
+import { hashPassword } from '../src/utils/password.js';
+import { productRepository } from '../src/modules/products/product.repository.js';
+import { userRepository } from '../src/modules/users/user.repository.js';
+import { orderRepository } from '../src/modules/orders/order.repository.js';
+import { storefrontRepository } from '../src/modules/storefront/storefront.repository.js';
+import { prisma } from '../src/database/prisma.js';
+import { PRODUCT_STATUS } from '../src/constants/product.js';
 import { ORDER_STATUS } from '../src/constants/orderStatus.js';
+import { DEFAULT_COMMERCE_SETTINGS } from '../src/constants/commerceDefaults.js';
 import { ROLES } from '../src/constants/roles.js';
 import { loginAdmin } from './helpers/adminAuth.js';
 
@@ -12,7 +17,23 @@ describe('Orders API', () => {
   let productId;
 
   beforeEach(async () => {
-    const product = await Product.create({
+    await storefrontRepository.upsertByKey(
+      'default',
+      {
+        isPublished: true,
+        commerceSettings: DEFAULT_COMMERCE_SETTINGS,
+        navigation: [],
+        heroSlides: [],
+        showcase: {},
+        collectionHeroes: {},
+        shopTheLook: {},
+        footerSocial: {},
+        authPages: {}
+      },
+      { updatedBy: 'test' }
+    );
+
+    const product = await productRepository.create({
       title: 'Velvet Luxury Kurta',
       slug: 'velvet-luxury-kurta',
       sku: 'M.0002',
@@ -26,7 +47,7 @@ describe('Orders API', () => {
       description: { intro: 'Test', detail: 'Detail', highlights: [] },
       specifications: { composition: 'Velvet', care: 'Dry clean', includes: 'Kurta' }
     });
-    productId = product._id.toString();
+    productId = product.id;
   });
 
   it('creates a guest checkout order', async () => {
@@ -60,7 +81,10 @@ describe('Orders API', () => {
   });
 
   it('applies free shipping for orders >= 15000 subtotal', async () => {
-    await Product.findByIdAndUpdate(productId, { price: 20000 });
+    await prisma.product.update({
+      where: { id: productId },
+      data: { price: 20000 }
+    });
 
     const response = await request(app)
       .post('/api/v1/orders')
@@ -82,8 +106,8 @@ describe('Orders API', () => {
   });
 
   it('cancels a pending admin order and restores stock', async () => {
-    const passwordHash = await User.hashPassword('AdminPass123');
-    await User.create({
+    const passwordHash = await hashPassword('AdminPass123');
+    await userRepository.create({
       name: 'Admin User',
       email: 'admin@marhas.com',
       passwordHash,
@@ -111,7 +135,7 @@ describe('Orders API', () => {
 
     expect(checkout.status).toBe(201);
     const orderId = checkout.body.data._id;
-    const stockAfterCheckout = (await Product.findById(productId)).stock;
+    const stockAfterCheckout = (await productRepository.findById(productId)).stock;
     expect(stockAfterCheckout).toBe(3);
 
     const cancel = await request(app)
@@ -122,17 +146,17 @@ describe('Orders API', () => {
     expect(cancel.status).toBe(200);
     expect(cancel.body.data.status).toBe(ORDER_STATUS.CANCELLED);
 
-    const stockAfterCancel = (await Product.findById(productId)).stock;
+    const stockAfterCancel = (await productRepository.findById(productId)).stock;
     expect(stockAfterCancel).toBe(5);
 
-    const order = await Order.findById(orderId);
+    const order = await orderRepository.findById(orderId);
     expect(order.status).toBe(ORDER_STATUS.CANCELLED);
     expect(order.cancellationReason).toBe('Customer request');
   });
 
   it('cancels an order even when product document has legacy invalid fields', async () => {
-    const passwordHash = await User.hashPassword('AdminPass123');
-    await User.create({
+    const passwordHash = await hashPassword('AdminPass123');
+    await userRepository.create({
       name: 'Admin User',
       email: 'admin@marhas.com',
       passwordHash,
@@ -140,26 +164,23 @@ describe('Orders API', () => {
       isEmailVerified: true
     });
 
-    await Product.collection.insertOne({
-      title: 'Legacy Product',
-      slug: 'legacy-product',
-      sku: 'M.LEGACY',
-      category: 'summer',
-      price: 5000,
-      stock: 4,
-      status: PRODUCT_STATUS.PUBLISHED,
-      sizes: ['M'],
-      colors: [{ name: 'Bad', hex: 'not-a-hex' }],
-      images: [{ url: 'https://cdn.marhas.com/legacy.jpg', alt: 'Legacy', order: 0 }],
-      description: { intro: 'Legacy', detail: 'Legacy', highlights: [] },
-      specifications: { composition: 'Silk', care: 'Dry clean', includes: 'Set' },
-      deletedAt: null,
-      createdAt: new Date(),
-      updatedAt: new Date()
+    const legacyProduct = await prisma.product.create({
+      data: {
+        title: 'Legacy Product',
+        slug: 'legacy-product',
+        sku: 'M.LEGACY',
+        category: 'summer',
+        price: 5000,
+        stock: 4,
+        status: PRODUCT_STATUS.PUBLISHED,
+        sizes: ['M'],
+        colors: [{ name: 'Bad', hex: 'not-a-hex' }],
+        images: [{ url: 'https://cdn.marhas.com/legacy.jpg', alt: 'Legacy', order: 0 }],
+        description: { intro: 'Legacy', detail: 'Legacy', highlights: [] },
+        specifications: { composition: 'Silk', care: 'Dry clean', includes: 'Set' }
+      }
     });
-
-    const legacyProduct = await Product.findOne({ sku: 'M.LEGACY' });
-    const legacyProductId = legacyProduct._id.toString();
+    const legacyProductId = legacyProduct.id;
 
     const token = await loginAdmin(app, {
       email: 'admin@marhas.com',
@@ -190,7 +211,7 @@ describe('Orders API', () => {
     expect(cancel.status).toBe(200);
     expect(cancel.body.data.status).toBe(ORDER_STATUS.CANCELLED);
 
-    const stockAfterCancel = (await Product.findOne({ sku: 'M.LEGACY' })).stock;
+    const stockAfterCancel = (await productRepository.findBySku('M.LEGACY')).stock;
     expect(stockAfterCancel).toBe(4);
   });
 });

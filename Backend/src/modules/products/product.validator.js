@@ -1,15 +1,15 @@
 import { z } from 'zod';
 import {
   paginationSchema,
-  mongoIdParamSchema,
-  objectIdSchema
+  uuidParamSchema,
+  uuidSchema
 } from '../../middlewares/validate.middleware.js';
 import { FRONTEND_TO_BACKEND_CATEGORY } from '../../constants/categoryMap.js';
 import {
   DISCOUNT_TYPES,
   PRODUCT_CATEGORIES,
   PRODUCT_STATUS
-} from './product.model.js';
+} from '../../constants/product.js';
 
 const hexColorSchema = z
   .string()
@@ -120,7 +120,7 @@ export const productSearchQuerySchema = productListQuerySchema.extend({
   q: z.string().trim().min(1, 'Search query is required')
 });
 
-export const productIdParamSchema = mongoIdParamSchema;
+export const productIdParamSchema = uuidParamSchema;
 
 export const parseJsonField = (value, fallback) => {
   if (value === undefined || value === null || value === '') {
@@ -161,5 +161,5 @@ export const normalizeProductBody = (body = {}) => {
 };
 
 export const productIdListSchema = z.object({
-  ids: z.array(objectIdSchema).min(1).max(50)
+  ids: z.array(uuidSchema).min(1).max(50)
 });

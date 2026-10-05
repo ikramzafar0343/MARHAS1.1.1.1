@@ -1,10 +1,11 @@
 # MARHAS 1.1.1.1
 
-**MARHAS** is a full-stack luxury fashion e-commerce platform with a React storefront, Express REST API, MongoDB database, and an admin dashboard for products, orders, inventory, analytics, and storefront content.
+**MARHAS** is a full-stack luxury fashion e-commerce platform with a React storefront, Express REST API, PostgreSQL database, and an admin dashboard for products, orders, inventory, analytics, and storefront content.
 
 [![Node.js](https://img.shields.io/badge/Node.js-%3E%3D20-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](https://react.dev/)
-[![MongoDB](https://img.shields.io/badge/MongoDB-Atlas-47A248?logo=mongodb&logoColor=white)](https://www.mongodb.com/atlas)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
+[![Prisma](https://img.shields.io/badge/Prisma-ORM-2D3748?logo=prisma&logoColor=white)](https://www.prisma.io/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./Backend/package.json)
 
 ---
@@ -57,8 +58,8 @@
 | Layer      | Technologies |
 |-----------|--------------|
 | Frontend  | React 19, Vite 8, Tailwind CSS 4, React Router 7, Axios, Framer Motion |
-| Backend   | Node.js 20+, Express 5, Mongoose, JWT, Multer, Nodemailer, Pino |
-| Database  | MongoDB Atlas |
+| Backend   | Node.js 20+, Express 5, Prisma, JWT, Multer, Nodemailer, Pino |
+| Database  | PostgreSQL 16 |
 | Storage   | Local (dev), Cloudinary or AWS S3 (production) |
 
 ---
@@ -93,7 +94,7 @@ MARHAS/
 
 - **Node.js** 20 or higher
 - **npm** 10+
-- **MongoDB Atlas** cluster (free tier works)
+- **PostgreSQL 16** (local or Hostinger Docker `marhas-db`)
 - **Cloudinary** account (recommended for production uploads)
 - Git
 
@@ -113,7 +114,7 @@ cd MARHAS1.1.1.1
 ```bash
 cd Backend
 cp .env.example .env
-# Edit .env with your MongoDB URI and JWT secrets (min 32 characters each)
+# Edit .env with DATABASE_URL and JWT secrets (min 32 characters each)
 npm install
 npm run seed    # optional — seeds admin user & sample data
 npm run dev
@@ -142,7 +143,7 @@ App runs at: `http://localhost:5173`
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `MONGODB_URI` | Yes | MongoDB Atlas connection string |
+| `DATABASE_URL` | Yes | PostgreSQL connection string (Prisma) |
 | `JWT_ACCESS_SECRET` | Yes | Min 32 characters |
 | `JWT_REFRESH_SECRET` | Yes | Min 32 characters |
 | `CORS_ORIGIN` | Yes | Comma-separated allowed origins (e.g. `http://localhost:5173`) |
@@ -184,11 +185,12 @@ This repo deploys as **one Docker service** — API and React frontend on the sa
 
 The root [`Dockerfile`](./Dockerfile) builds the frontend and serves it from the Express server at `/`.
 
-### Step 1 — MongoDB Atlas
+### Step 1 — PostgreSQL
 
-1. Create a free cluster at [MongoDB Atlas](https://www.mongodb.com/atlas).
-2. Add your IP (or `0.0.0.0/0` for cloud hosts) under **Network Access**.
-3. Create a database user and copy the connection string.
+1. Run PostgreSQL 16 locally, or use the Hostinger Docker stack (`marhas-db`).
+2. Create database `marhas`.
+3. Set `DATABASE_URL` in `.env` (see `.env.example`).
+4. Run `npx prisma migrate deploy` then `npm run seed`.
 
 ### Step 2 — Deploy via Blueprint
 
@@ -203,8 +205,7 @@ The root [`Dockerfile`](./Dockerfile) builds the frontend and serves it from the
 
 ```
 NODE_ENV=production
-MONGODB_URI=mongodb+srv://<user>:<pass>@<cluster>.mongodb.net/?retryWrites=true&w=majority
-DATABASE_NAME=marhas
+DATABASE_URL=postgresql://user:pass@host:5432/marhas?schema=public&connection_limit=10
 JWT_ACCESS_SECRET=<random-32+-char-string>
 JWT_REFRESH_SECRET=<random-32+-char-string>
 CORS_ORIGIN=https://marhas.onrender.com
@@ -297,7 +298,7 @@ Config file: [`frontend/railway.toml`](./frontend/railway.toml)
 | CORS errors in browser | Add your exact frontend URL to backend `CORS_ORIGIN` |
 | Upload images return **404** on Render | Local uploads from dev are not on the server. Set `SYNC_DEFAULT_MEDIA=true`, redeploy once, then remove it — or run `npm run reset:content` in Render Shell |
 | Uploads disappear after redeploy | Set `STORAGE_PROVIDER=cloudinary` (local disk is ephemeral on cloud hosts) |
-| `MONGODB_URI is required` | Add MongoDB Atlas connection string in service environment variables |
+| `DATABASE_URL is required` | Set a PostgreSQL connection string in service environment variables |
 
 ---
 

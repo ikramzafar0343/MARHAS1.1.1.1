@@ -1,12 +1,13 @@
 import request from 'supertest';
 import { createApp } from '../src/app.js';
-import { Product, PRODUCT_STATUS } from '../src/modules/products/product.model.js';
+import { productRepository } from '../src/modules/products/product.repository.js';
+import { PRODUCT_STATUS } from '../src/constants/product.js';
 
 describe('Products API', () => {
   const app = createApp();
 
   beforeEach(async () => {
-    await Product.create({
+    await productRepository.create({
       title: 'Embroidered Silk Ensemble',
       slug: 'embroidered-silk-ensemble',
       sku: 'M.0001',

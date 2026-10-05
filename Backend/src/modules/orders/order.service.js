@@ -1,6 +1,7 @@
+import { prisma } from '../../database/prisma.js';
 import { OrderRepository } from './order.repository.js';
 import { ProductRepository } from '../products/product.repository.js';
-import { DISCOUNT_TYPES, PRODUCT_STATUS } from '../products/product.model.js';
+import { DISCOUNT_TYPES, PRODUCT_STATUS } from '../../constants/product.js';
 import { ADMIN_ROLES } from '../../constants/roles.js';
 import {
   ORDER_STATUS,
@@ -10,13 +11,12 @@ import {
 import { AppError } from '../../utils/AppError.js';
 import { logger } from '../../utils/logger.js';
 import {
-  DEFAULT_COMMERCE_SETTINGS,
-  resolveCommerceSettings,
   calculateShippingFee,
   calculateTaxAmount
 } from '../../constants/commerceDefaults.js';
 import { storefrontRepository } from '../storefront/storefront.repository.js';
 import { sendOrderConfirmationNotifications } from './order.notifications.js';
+import { normalizeProduct, decimalToNumber } from '../../database/mapper.js';
 
 const getEffectivePrice = (product) => {
   if (!product.discount || product.discount <= 0) {
@@ -45,14 +45,15 @@ export class OrderService {
 
   async getCommerceSettings() {
     const published = await this.storefrontRepository.findPublished('default');
-    const fallback = published || (await this.storefrontRepository.findByKey('default', { lean: true }));
-    return resolveCommerceSettings(fallback?.commerceSettings || DEFAULT_COMMERCE_SETTINGS);
+    if (!published?.commerceSettings) {
+      throw new AppError('Published storefront commerce settings are required', 503);
+    }
+    const { resolveCommerceSettings } = await import('../../constants/commerceDefaults.js');
+    return resolveCommerceSettings(published.commerceSettings);
   }
 
-  async buildOrderItems(items) {
-    const productIds = items.map((item) => item.productId);
-    const products = await this.productRepository.findByIds(productIds);
-    const productMap = new Map(products.map((product) => [product._id.toString(), product]));
+  async buildOrderItems(items, txProducts) {
+    const productMap = new Map(txProducts.map((product) => [product.id, product]));
 
     const orderItems = [];
     let subtotal = 0;
@@ -81,7 +82,7 @@ export class OrderService {
       subtotal += lineTotal;
 
       orderItems.push({
-        productId: product._id,
+        productId: product.id,
         name: product.title,
         sku: product.sku,
         quantity: item.quantity,
@@ -97,29 +98,58 @@ export class OrderService {
   }
 
   async checkout(payload, userId = null) {
-    const { orderItems, subtotal } = await this.buildOrderItems(payload.items);
     const commerceSettings = await this.getCommerceSettings();
-    const shippingFee = calculateShippingFee(subtotal, commerceSettings);
-    const taxAmount = calculateTaxAmount(subtotal, commerceSettings);
-    const total = subtotal + shippingFee + taxAmount;
-    const stockAdjustments = [];
 
-    try {
-      for (const item of payload.items) {
-        const result = await this.productRepository.adjustStock(
-          item.productId,
-          -item.quantity,
-          { updatedBy: userId }
-        );
+    const created = await prisma.$transaction(async (tx) => {
+      const productIds = [...new Set(payload.items.map((item) => item.productId))];
 
-        if (!result) {
-          throw new AppError(`Unable to update stock for product ${item.productId}`, 400);
-        }
+      const lockedRows = await tx.$queryRawUnsafe(
+        `SELECT id, title, slug, sku, category, price, "originalPrice", discount, "discountType",
+                description, specifications, "returnPolicy", sizes, colors, variants, images,
+                "bestSeller", stock, "lowStockThreshold", rating, "reviewCount", status,
+                "deletedAt", "createdBy", "updatedBy", "createdAt", "updatedAt"
+         FROM products
+         WHERE id = ANY($1::uuid[])
+           AND "deletedAt" IS NULL
+         FOR UPDATE`,
+        productIds
+      );
 
-        stockAdjustments.push({ productId: item.productId, quantity: item.quantity });
+      const products = lockedRows.map((row) =>
+        normalizeProduct({
+          ...row,
+          price: decimalToNumber(row.price),
+          discount: decimalToNumber(row.discount),
+          originalPrice: decimalToNumber(row.originalPrice),
+          rating: decimalToNumber(row.rating)
+        })
+      );
+
+      if (products.length !== productIds.length) {
+        throw new AppError('One or more products were not found', 404);
       }
 
-      const created = await this.orderRepository.create(
+      const { orderItems, subtotal } = await this.buildOrderItems(payload.items, products);
+      const shippingFee = calculateShippingFee(subtotal, commerceSettings);
+      const taxAmount = calculateTaxAmount(subtotal, commerceSettings);
+      const total = subtotal + shippingFee + taxAmount;
+
+      for (const item of payload.items) {
+        const product = products.find((p) => p.id === item.productId);
+        const newStock = product.stock - item.quantity;
+        if (newStock < 0) {
+          throw new AppError(`Insufficient stock for ${product.title}`, 400);
+        }
+        await tx.product.update({
+          where: { id: item.productId },
+          data: { stock: newStock, updatedBy: userId }
+        });
+        product.stock = newStock;
+      }
+
+      const orderRepo = new OrderRepository(tx);
+      return orderRepo.createInTransaction(
+        tx,
         {
           userId,
           customer: payload.fullName.trim(),
@@ -143,18 +173,10 @@ export class OrderService {
         },
         { updatedBy: userId }
       );
+    });
 
-      void sendOrderConfirmationNotifications(created);
-
-      return created;
-    } catch (error) {
-      for (const adjustment of stockAdjustments) {
-        await this.productRepository.adjustStock(adjustment.productId, adjustment.quantity, {
-          updatedBy: userId
-        });
-      }
-      throw error;
-    }
+    void sendOrderConfirmationNotifications(created);
+    return created;
   }
 
   async getMyOrders(userId, query) {
@@ -184,7 +206,10 @@ export class OrderService {
       return true;
     }
 
-    if (user && order.userId.toString() === user._id.toString()) {
+    const orderUserId =
+      typeof order.userId === 'object' ? order.userId.id || order.userId._id : order.userId;
+
+    if (user && String(orderUserId) === String(user._id || user.id)) {
       return true;
     }
 
@@ -258,11 +283,9 @@ export class OrderService {
       update.email = update.email.toLowerCase().trim();
     }
 
-    const updated = await this.orderRepository.updateById(id, update, {
+    return this.orderRepository.updateById(id, update, {
       updatedBy: userId
     });
-
-    return updated;
   }
 
   assertValidStatusTransition(currentStatus, nextStatus) {
@@ -296,21 +319,49 @@ export class OrderService {
 
     this.assertValidStatusTransition(order.status, ORDER_STATUS.CANCELLED);
 
-    for (const item of order.items) {
-      const productId = item.productId?._id ?? item.productId;
-      const result = await this.productRepository.adjustStock(productId, item.quantity, {
-        updatedBy: userId
-      });
+    await prisma.$transaction(async (tx) => {
+      for (const item of order.items) {
+        const productId =
+          typeof item.productId === 'object'
+            ? item.productId.id || item.productId._id
+            : item.productId;
 
-      if (!result) {
-        logger.warn(
-          { orderId: id, productId, itemName: item.name },
-          'Skipped stock restore during cancel because product was not found'
+        const rows = await tx.$queryRawUnsafe(
+          `SELECT id, stock FROM products
+           WHERE id = $1::uuid AND "deletedAt" IS NULL
+           FOR UPDATE`,
+          productId
         );
-      }
-    }
 
-    return this.orderRepository.cancel(id, reason, userId);
+        if (!rows.length) {
+          logger.warn(
+            { orderId: id, productId, itemName: item.name },
+            'Skipped stock restore during cancel because product was not found'
+          );
+          continue;
+        }
+
+        await tx.product.update({
+          where: { id: productId },
+          data: {
+            stock: rows[0].stock + item.quantity,
+            updatedBy: userId
+          }
+        });
+      }
+
+      await tx.order.update({
+        where: { id },
+        data: {
+          status: ORDER_STATUS.CANCELLED,
+          cancelledAt: new Date(),
+          cancellationReason: reason,
+          updatedBy: userId
+        }
+      });
+    });
+
+    return this.orderRepository.findById(id, { populateItems: true });
   }
 }
 

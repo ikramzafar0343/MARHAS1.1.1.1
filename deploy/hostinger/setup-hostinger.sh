@@ -48,7 +48,22 @@ fi
 
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
-apt-get install -y -qq git curl ca-certificates gnupg nginx certbot python3-certbot-nginx
+# Do NOT install nginx if :80 is already owned by the other site (Apache/OLS/etc).
+apt-get install -y -qq git curl ca-certificates gnupg certbot
+PORT80_OWNER="$(ss -tlnp 2>/dev/null | grep -E ':80\s' | head -n1 || true)"
+echo "    Port 80 owner: ${PORT80_OWNER:-none}"
+
+if echo "${PORT80_OWNER}" | grep -qi apache; then
+  apt-get install -y -qq apache2 python3-certbot-apache
+  a2enmod proxy proxy_http headers >/dev/null 2>&1 || true
+elif echo "${PORT80_OWNER}" | grep -qi nginx; then
+  apt-get install -y -qq python3-certbot-nginx || true
+elif [[ -z "${PORT80_OWNER}" ]]; then
+  apt-get install -y -qq nginx python3-certbot-nginx
+else
+  echo "WARN: Port 80 is in use by another process — will configure reverse proxy for that stack after Docker is up"
+  apt-get install -y -qq python3-certbot-apache python3-certbot-nginx 2>/dev/null || true
+fi
 
 if ! command -v docker >/dev/null 2>&1; then
   echo "==> Installing Docker..."
@@ -167,21 +182,57 @@ docker compose -p marhas -f "${COMPOSE_FILE}" --env-file "${ENV_FILE}" exec -T a
   echo "  docker compose -p marhas -f ${APP_DIR}/${COMPOSE_FILE} --env-file ${APP_DIR}/${ENV_FILE} exec api node src/database/seed.js"
 }
 
-echo "==> Installing host nginx site for ${DOMAIN} only (other sites untouched)..."
-mkdir -p /etc/nginx/sites-available /etc/nginx/sites-enabled
-cp "${APP_DIR}/${HOST_NGINX_SRC}" /etc/nginx/sites-available/marhas.pk
-ln -sf /etc/nginx/sites-available/marhas.pk /etc/nginx/sites-enabled/marhas.pk
-nginx -t
-systemctl reload nginx
+echo "==> Configuring reverse proxy for ${DOMAIN} only (other sites untouched)..."
+configure_reverse_proxy() {
+  local owner
+  owner="$(ss -tlnp 2>/dev/null | grep -E ':80\s' | head -n1 || true)"
+
+  if systemctl is-active --quiet apache2 2>/dev/null || echo "${owner}" | grep -qi apache; then
+    echo "    Using Apache (existing site on :80)"
+    cp "${APP_DIR}/deploy/hostinger/host-apache-marhas.pk.conf" /etc/apache2/sites-available/marhas.pk.conf
+    a2enmod proxy proxy_http headers >/dev/null 2>&1 || true
+    a2ensite marhas.pk.conf >/dev/null 2>&1 || true
+    apache2ctl configtest
+    systemctl reload apache2
+    return 0
+  fi
+
+  if systemctl is-active --quiet nginx 2>/dev/null || [[ -d /etc/nginx/sites-available ]]; then
+    echo "    Using nginx"
+    mkdir -p /etc/nginx/sites-available /etc/nginx/sites-enabled
+    cp "${APP_DIR}/${HOST_NGINX_SRC}" /etc/nginx/sites-available/marhas.pk
+    ln -sf /etc/nginx/sites-available/marhas.pk /etc/nginx/sites-enabled/marhas.pk
+    # If stock nginx failed earlier because :80 was busy, don't force-start it —
+    # only reload when nginx is already the active front door.
+    if systemctl is-active --quiet nginx 2>/dev/null; then
+      nginx -t
+      systemctl reload nginx
+    else
+      echo "WARN: nginx package present but not active (likely :80 held by another service)."
+      echo "      Docker stack is on 127.0.0.1:${DOCKER_PUBLISH_PORT} — point your existing"
+      echo "      web server vhost for ${DOMAIN} to that port, or free :80 and start nginx."
+    fi
+    return 0
+  fi
+
+  echo "WARN: Could not auto-detect Apache/nginx. Docker is healthy on 127.0.0.1:${DOCKER_PUBLISH_PORT}."
+  echo "      Manually proxy ${DOMAIN} → http://127.0.0.1:${DOCKER_PUBLISH_PORT}"
+}
+
+configure_reverse_proxy
 
 echo "==> SSL (Let's Encrypt) for ${DOMAIN} only..."
 if certbot certificates 2>/dev/null | grep -q "${DOMAIN}"; then
   certbot renew --quiet || true
 else
-  certbot --nginx -d "${DOMAIN}" -d "www.${DOMAIN}" --non-interactive --agree-tos -m "admin@${DOMAIN}" || {
-    echo "SSL pending — in Cloudflare set A records for ${DOMAIN} + www → ${HOSTINGER_IP}, then:"
-    echo "  certbot --nginx -d ${DOMAIN} -d www.${DOMAIN}"
-  }
+  if systemctl is-active --quiet apache2 2>/dev/null; then
+    certbot --apache -d "${DOMAIN}" -d "www.${DOMAIN}" --non-interactive --agree-tos -m "admin@${DOMAIN}" || true
+  elif systemctl is-active --quiet nginx 2>/dev/null; then
+    certbot --nginx -d "${DOMAIN}" -d "www.${DOMAIN}" --non-interactive --agree-tos -m "admin@${DOMAIN}" || true
+  else
+    echo "SSL pending — after DNS points to ${HOSTINGER_IP} and reverse proxy is set:"
+    echo "  certbot --apache -d ${DOMAIN} -d www.${DOMAIN}   # or --nginx"
+  fi
 fi
 
 echo ""

@@ -2,17 +2,22 @@
 # MARHAS Hostinger installer — Ubuntu 24.04 + Docker + PostgreSQL
 # Isolates MARHAS in Docker (project: marhas). Does not touch other sites/containers.
 #
-# On Hostinger VPS:
-#   ssh root@72.61.19.3
-#   curl -fsSL https://raw.githubusercontent.com/ikramzafar0343/MARHAS1.1.1.1/main/deploy/hostinger/setup-hostinger.sh -o /tmp/setup-hostinger.sh
-#   bash /tmp/setup-hostinger.sh
+# Private GitHub repo — set a PAT (repo read) first:
+#   export GITHUB_TOKEN=ghp_xxxxxxxx
+#   curl -fsSL -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+#     https://raw.githubusercontent.com/ikramzafar0343/MARHAS1.1.1.1/main/deploy/hostinger/setup-hostinger.sh \
+#     -o /tmp/setup-hostinger.sh
+#   chmod +x /tmp/setup-hostinger.sh && bash /tmp/setup-hostinger.sh
+#
+# Or clone then run (also needs token for private repo):
+#   git clone --depth 1 -b main "https://${GITHUB_TOKEN}@github.com/ikramzafar0343/MARHAS1.1.1.1.git" /opt/marhas
+#   bash /opt/marhas/deploy/hostinger/setup-hostinger.sh
 #
 # After editing SMTP_PASS in /opt/marhas/deploy/hostinger/.env:
-#   bash /tmp/setup-hostinger.sh --continue
+#   bash /opt/marhas/deploy/hostinger/setup-hostinger.sh --continue
 set -euo pipefail
 
 APP_DIR="/opt/marhas"
-REPO_URL="https://github.com/ikramzafar0343/MARHAS1.1.1.1.git"
 BRANCH="main"
 DOMAIN="marhas.pk"
 COMPOSE_FILE="deploy/hostinger/docker-compose.yml"
@@ -20,6 +25,12 @@ ENV_FILE="deploy/hostinger/.env"
 HOST_NGINX_SRC="deploy/hostinger/host-nginx-marhas.pk.conf"
 DOCKER_PUBLISH_PORT="5080"
 HOSTINGER_IP="72.61.19.3"
+
+if [[ -n "${GITHUB_TOKEN:-}" ]]; then
+  REPO_URL="https://${GITHUB_TOKEN}@github.com/ikramzafar0343/MARHAS1.1.1.1.git"
+else
+  REPO_URL="https://github.com/ikramzafar0343/MARHAS1.1.1.1.git"
+fi
 
 if [[ "${EUID:-0}" -ne 0 ]]; then
   echo "Run as root: sudo bash setup-hostinger.sh"
@@ -29,6 +40,11 @@ fi
 echo "==> Hostinger MARHAS deploy (isolated Docker + PostgreSQL)"
 echo "    Target IP: ${HOSTINGER_IP}  |  Domain: ${DOMAIN}"
 echo "    Will NOT bind host :80/:443 and will NOT modify other Docker projects"
+
+if [[ -z "${GITHUB_TOKEN:-}" ]]; then
+  echo "WARN: GITHUB_TOKEN is unset. Private repos will fail to clone/pull."
+  echo "      export GITHUB_TOKEN=ghp_your_pat_with_repo_read"
+fi
 
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
@@ -47,12 +63,18 @@ fi
 
 echo "==> Cloning or updating MARHAS into ${APP_DIR}..."
 if [[ -d "${APP_DIR}/.git" ]]; then
+  git -C "${APP_DIR}" remote set-url origin "${REPO_URL}"
   git -C "${APP_DIR}" fetch origin
   git -C "${APP_DIR}" checkout "${BRANCH}"
   git -C "${APP_DIR}" pull --ff-only origin "${BRANCH}"
 else
   mkdir -p "$(dirname "${APP_DIR}")"
   git clone --depth 1 --branch "${BRANCH}" "${REPO_URL}" "${APP_DIR}"
+fi
+
+# Avoid leaving the token in git remote permanently
+if [[ -n "${GITHUB_TOKEN:-}" ]]; then
+  git -C "${APP_DIR}" remote set-url origin "https://github.com/ikramzafar0343/MARHAS1.1.1.1.git"
 fi
 
 cd "${APP_DIR}"

@@ -126,11 +126,12 @@ sed -i 's|^NODE_ENV=.*|NODE_ENV=production|' "${ENV_FILE}" || true
 sed -i 's|^CORS_ORIGIN=.*|CORS_ORIGIN=https://marhas.pk,https://www.marhas.pk|' "${ENV_FILE}" || true
 sed -i 's|^APP_URL=.*|APP_URL=https://marhas.pk|' "${ENV_FILE}" || true
 
-# shellcheck disable=SC1090
-set -a
-# shellcheck source=/dev/null
-source "${ENV_FILE}"
-set +a
+# Load only the keys we need (never `source` .env — values like EMAIL_FROM=Name <email> break bash)
+POSTGRES_USER="$(grep -E '^POSTGRES_USER=' "${ENV_FILE}" | head -n1 | cut -d= -f2- | tr -d '\r' | sed 's/^["'\'']//;s/["'\'']$//')"
+POSTGRES_PASSWORD="$(grep -E '^POSTGRES_PASSWORD=' "${ENV_FILE}" | head -n1 | cut -d= -f2- | tr -d '\r' | sed 's/^["'\'']//;s/["'\'']$//')"
+POSTGRES_DB="$(grep -E '^POSTGRES_DB=' "${ENV_FILE}" | head -n1 | cut -d= -f2- | tr -d '\r' | sed 's/^["'\'']//;s/["'\'']$//')"
+POSTGRES_USER="${POSTGRES_USER:-marhas}"
+POSTGRES_DB="${POSTGRES_DB:-marhas}"
 
 if [[ -z "${POSTGRES_PASSWORD:-}" ]]; then
   echo "ERROR: POSTGRES_PASSWORD missing in ${ENV_FILE}"

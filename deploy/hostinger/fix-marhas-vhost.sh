@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# Attach marhas.pk to the existing Docker nginx on :80 (e.g. Zermae front proxy).
-# Handles published :80 AND host-network nginx (PORTS column empty).
-# Does not replace other sites — only adds server_name marhas.pk / www.
+# Attach marhas.pk to Zermae's Docker nginx (often host-network + bind-mounted nginx.conf).
+# Patches the host nginx.conf to include conf.d when missing, then adds marhas.pk → :5080.
 set -euo pipefail
 
 DOMAIN="marhas.pk"
@@ -9,10 +8,10 @@ MARHAS_CONTAINER="marhas-nginx"
 HEALTH_PATH="/api/v1/health"
 USE_HOST_PROXY=0
 FRONT=""
+HOST_NGINX_CONF=""
 
 echo "==> Locating front nginx (published :80 or host network)..."
 
-# 1) Container with published host port 80
 FRONT="$(
   docker ps --format '{{.Names}}\t{{.Ports}}' \
     | awk -F'\t' '$2 ~ /(^|[, ])0\.0\.0\.0:80->|:::80->|:80->80/ { print $1; exit }'
@@ -24,7 +23,6 @@ if [[ -z "${FRONT}" ]]; then
   )"
 fi
 
-# 2) Host-network nginx (common on Hostinger multi-site) — inspect NetworkMode
 if [[ -z "${FRONT}" ]]; then
   while IFS= read -r name; do
     [[ -z "${name}" || "${name}" == "${MARHAS_CONTAINER}" ]] && continue
@@ -38,7 +36,6 @@ if [[ -z "${FRONT}" ]]; then
   done < <(docker ps --format '{{.Names}}')
 fi
 
-# 3) Fallback: any running *nginx* that is not marhas-nginx
 if [[ -z "${FRONT}" ]]; then
   FRONT="$(
     docker ps --format '{{.Names}}' \
@@ -52,36 +49,69 @@ if [[ -z "${FRONT}" ]]; then
   fi
 fi
 
-# 4) Confirm something is listening on :80 (informational)
-if command -v ss >/dev/null 2>&1; then
-  echo "    Host listeners on :80:"
-  ss -tlnp 2>/dev/null | grep -E ':80\s' | sed 's/^/      /' || echo "      (none via ss)"
-fi
-
 if [[ -z "${FRONT}" ]]; then
   echo "ERROR: No front nginx container found."
   docker ps --format 'table {{.Names}}\t{{.Ports}}\t{{.Image}}'
   exit 1
 fi
 
+mode="$(docker inspect -f '{{.HostConfig.NetworkMode}}' "${FRONT}" 2>/dev/null || true)"
+[[ "${mode}" == "host" ]] && USE_HOST_PROXY=1
+
 echo "    Front proxy container: ${FRONT}"
 echo "    Host-network / 127.0.0.1:5080 proxy: ${USE_HOST_PROXY}"
 
 if ! docker ps --format '{{.Names}}' | grep -qx "${MARHAS_CONTAINER}"; then
-  echo "ERROR: ${MARHAS_CONTAINER} is not running. Start MARHAS first."
+  echo "ERROR: ${MARHAS_CONTAINER} is not running."
   exit 1
+fi
+
+# Find bind-mounted nginx.conf on the host (Zermae pattern)
+while IFS= read -r line; do
+  src="${line%% *}"
+  dst="${line#* }"
+  if [[ "${dst}" == "/etc/nginx/nginx.conf" || "${dst}" == *"/nginx.conf" ]]; then
+    HOST_NGINX_CONF="${src}"
+    break
+  fi
+done < <(docker inspect -f '{{range .Mounts}}{{.Source}} {{.Destination}}{{"\n"}}{{end}}' "${FRONT}")
+
+if [[ -n "${HOST_NGINX_CONF}" && -f "${HOST_NGINX_CONF}" ]]; then
+  echo "    Host-mounted nginx.conf: ${HOST_NGINX_CONF}"
+  if ! grep -qE 'include[[:space:]]+/etc/nginx/conf\.d/\*\.conf' "${HOST_NGINX_CONF}"; then
+    echo "==> Adding include /etc/nginx/conf.d/*.conf; to host nginx.conf..."
+    if grep -qE '[[:space:]]*http[[:space:]]*\{' "${HOST_NGINX_CONF}"; then
+      # Insert include once, right after the first http { line
+      awk '
+        BEGIN { done=0 }
+        {
+          print
+          if (!done && $0 ~ /^[[:space:]]*http[[:space:]]*\{/) {
+            print "    include /etc/nginx/conf.d/*.conf;"
+            done=1
+          }
+        }
+      ' "${HOST_NGINX_CONF}" > "${HOST_NGINX_CONF}.marhas.tmp"
+      mv "${HOST_NGINX_CONF}.marhas.tmp" "${HOST_NGINX_CONF}"
+    else
+      echo "ERROR: No http { block found in ${HOST_NGINX_CONF}"
+      exit 1
+    fi
+  else
+    echo "    conf.d include already present"
+  fi
+else
+  echo "    No host bind for nginx.conf (using container filesystem only)"
 fi
 
 UPSTREAM="marhas-nginx:80"
 if [[ "${USE_HOST_PROXY}" -eq 1 ]]; then
-  # Host-network nginx shares the host stack → hit MARHAS published bind
   UPSTREAM="127.0.0.1:5080"
 else
   echo "==> Connecting ${MARHAS_CONTAINER} to ${FRONT}'s Docker network(s)..."
   mapfile -t NETWORKS < <(docker inspect -f '{{range $k, $v := .NetworkSettings.Networks}}{{println $k}}{{end}}' "${FRONT}")
   for net in "${NETWORKS[@]}"; do
     [[ -z "${net}" ]] && continue
-    echo "    network: ${net}"
     docker network connect "${net}" "${MARHAS_CONTAINER}" 2>/dev/null || true
   done
 fi
@@ -96,17 +126,17 @@ for candidate in /etc/nginx/conf.d /etc/nginx/http.d /etc/nginx/sites-enabled; d
 done
 
 if [[ -z "${CONF_DIR}" ]]; then
-  echo "ERROR: No nginx conf.d / http.d / sites-enabled found in ${FRONT}"
-  docker exec "${FRONT}" sh -c 'ls -la /etc/nginx 2>/dev/null || true'
+  echo "ERROR: No nginx conf.d / http.d / sites-enabled in ${FRONT}"
   exit 1
 fi
 
-echo "    Using ${CONF_DIR}/marhas.pk.conf"
-echo "    proxy_pass → http://${UPSTREAM}"
+# Ensure conf.d exists even if image didn't have it
+docker exec "${FRONT}" sh -c "mkdir -p '${CONF_DIR}'"
 
-echo "==> Writing marhas.pk vhost..."
+echo "    Using ${CONF_DIR}/marhas.pk.conf → http://${UPSTREAM}"
+
 docker exec -i "${FRONT}" sh -c "cat > '${CONF_DIR}/marhas.pk.conf'" <<EOF
-# MARHAS — added by fix-marhas-vhost.sh (isolated from other server_name blocks)
+# BEGIN MARHAS
 server {
     listen 80;
     listen [::]:80;
@@ -125,30 +155,49 @@ server {
         proxy_send_timeout 120s;
     }
 }
+# END MARHAS
 EOF
 
+# Also drop a copy next to host nginx.conf for operators (not auto-loaded unless mounted)
+if [[ -n "${HOST_NGINX_CONF}" ]]; then
+  HOST_DIR="$(dirname "${HOST_NGINX_CONF}")"
+  cp /dev/null "${HOST_DIR}/marhas.pk.conf.example" 2>/dev/null || true
+  docker exec "${FRONT}" cat "${CONF_DIR}/marhas.pk.conf" > "${HOST_DIR}/marhas.pk.conf.example" || true
+fi
+
 echo "==> Testing and reloading front nginx..."
-docker exec "${FRONT}" nginx -t
+if ! docker exec "${FRONT}" nginx -t; then
+  echo "ERROR: nginx -t failed. Showing http { head of config:"
+  docker exec "${FRONT}" sh -c 'head -n 40 /etc/nginx/nginx.conf'
+  exit 1
+fi
 docker exec "${FRONT}" nginx -s reload
 
-echo "==> Verifying..."
-sleep 1
-OK_LOCAL="$(curl -fsS -H "Host: ${DOMAIN}" "http://127.0.0.1${HEALTH_PATH}" || true)"
-OK_DIRECT="$(curl -fsS "http://127.0.0.1:5080${HEALTH_PATH}" || true)"
+echo "==> Confirming server_name is loaded..."
+if ! docker exec "${FRONT}" nginx -T 2>/dev/null | grep -q 'server_name marhas.pk'; then
+  echo "ERROR: marhas.pk server block still not in nginx -T output."
+  echo "       Dumping include lines from nginx.conf:"
+  docker exec "${FRONT}" sh -c 'grep -n include /etc/nginx/nginx.conf || true'
+  exit 1
+fi
+echo "    server_name marhas.pk is active"
 
-echo "    MARHAS :5080 -> ${OK_DIRECT:0:80}"
-echo "    Host :80 Host=${DOMAIN} -> ${OK_LOCAL:0:80}"
+echo "==> Verifying health..."
+sleep 1
+OK_DIRECT="$(curl -fsS "http://127.0.0.1:5080${HEALTH_PATH}" || true)"
+OK_LOCAL="$(curl -fsS -H "Host: ${DOMAIN}" "http://127.0.0.1${HEALTH_PATH}" || true)"
+echo "    MARHAS :5080 -> ${OK_DIRECT:0:90}"
+echo "    Host :80 Host=${DOMAIN} -> ${OK_LOCAL:0:90}"
 
 if echo "${OK_LOCAL}" | grep -q '"status":"ok"'; then
   echo ""
-  echo "==> SUCCESS: marhas.pk now routes to MARHAS (Zermae untouched)."
-  echo "    Open https://marhas.pk (Cloudflare SSL/TLS = Full, purge cache if needed)."
+  echo "==> SUCCESS: marhas.pk routes to MARHAS (Zermae untouched)."
   exit 0
 fi
 
 echo ""
-echo "WARN: Front :80 still not returning MARHAS health JSON."
-echo "      Debug: docker exec ${FRONT} nginx -T | grep -A25 'server_name marhas'"
-echo "      Also check if Zermae mounts conf from a host volume that overwrites conf.d."
-docker inspect -f '{{range .Mounts}}{{.Source}} -> {{.Destination}}{{"\n"}}{{end}}' "${FRONT}" || true
+echo "WARN: Still not healthy on :80. Response headers:"
+curl -sS -D- -o /dev/null -H "Host: ${DOMAIN}" "http://127.0.0.1${HEALTH_PATH}" || true
+echo "Active server blocks:"
+docker exec "${FRONT}" nginx -T 2>/dev/null | grep -E 'server_name|listen ' | head -40
 exit 1

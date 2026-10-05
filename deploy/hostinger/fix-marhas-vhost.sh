@@ -102,16 +102,17 @@ docker exec "${FRONT}" nginx -t
 docker exec "${FRONT}" nginx -s reload
 
 sleep 1
-echo "==> Verify"
+echo "==> Verify (use SNI — Host header alone on 127.0.0.1 causes HTTP 421)"
 H80="$(curl -fsS -H "Host: ${DOMAIN}" "http://127.0.0.1/api/v1/health" || true)"
-H443="$(curl -kfsS -H "Host: ${DOMAIN}" "https://127.0.0.1/api/v1/health" || true)"
+# --resolve sets correct TLS SNI so nginx picks the marhas.pk server block
+H443="$(curl -kfsS --resolve "${DOMAIN}:443:127.0.0.1" "https://${DOMAIN}/api/v1/health" || true)"
 echo "    :80  => ${H80:0:90}"
 echo "    :443 => ${H443:0:90}"
 
 if echo "${H443}" | grep -q '"status":"ok"'; then
   echo ""
-  echo "==> SUCCESS: Cloudflare Full can reach MARHAS on origin :443."
-  echo "    In Cloudflare: Caching → Configuration → Purge Everything, then hard-refresh https://marhas.pk"
+  echo "==> SUCCESS: origin :443 serves MARHAS for ${DOMAIN} (Cloudflare Full OK)."
+  echo "    Cloudflare → Caching → Purge Everything, then hard-refresh https://${DOMAIN}"
   exit 0
 fi
 
